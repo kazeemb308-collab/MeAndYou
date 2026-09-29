@@ -77,7 +77,7 @@ async function loadPage(url,push=true){
     saveCurrentPage();
 
     if(push){
-      history.pushState({}, "", absolute.href);
+      history.pushState({},"",absolute.href);
     }
 
     if(restorePage(key)){
@@ -94,19 +94,16 @@ async function loadPage(url,push=true){
     document.title=parsed.title;
     document.body.className=parsed.body.className;
 
-    const wrapper=document.createElement("div");
-
-    [...parsed.body.childNodes].forEach(node=>{
-      wrapper.appendChild(node);
-    });
-
-    await executeScripts(wrapper);
-
     clearBody();
 
-    while(wrapper.firstChild){
-      document.body.appendChild(wrapper.firstChild);
+    // Put the new page into the real document first.
+    // Module scripts such as chat.js must be attached to document
+    // before the browser will execute them.
+    while(parsed.body.firstChild){
+      document.body.appendChild(parsed.body.firstChild);
     }
+
+    await executeScripts(document.body);
 
     window.scrollTo(0,0);
 
