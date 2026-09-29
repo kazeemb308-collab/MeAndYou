@@ -4,30 +4,38 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#075e54">
-  <title>Login — MeAndYou</title>
+  <title>Phone login — MeAndYou</title>
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
   <main class="auth-page">
     <section class="auth-card">
       <div class="logo small">M</div>
-      <h1>Welcome back</h1>
-      <p>Log in to continue to MeAndYou.</p>
-
-      <form id="loginForm" novalidate>
-        <label for="email">Email</label>
-        <input id="email" type="email" autocomplete="email" placeholder="you@example.com" required>
-
-        <label for="password">Password</label>
-        <input id="password" type="password" autocomplete="current-password" placeholder="Your password" required>
-
-        <button class="primary" type="submit">Log in</button>
+      <h1>Welcome to MeAndYou</h1>
+      <p>Enter your phone number to continue.</p>
+      <form id="phoneForm" novalidate>
+        <label for="phone">Phone number</label>
+        <div class="phone-row">
+          <select id="countryCode" aria-label="Country code">
+            <option value="+234" selected>🇳🇬 +234</option>
+            <option value="+233">🇬🇭 +233</option>
+            <option value="+254">🇰🇪 +254</option>
+            <option value="+27">🇿🇦 +27</option>
+            <option value="+1">🇺🇸 +1</option>
+            <option value="+44">🇬🇧 +44</option>
+          </select>
+          <input id="phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="801 234 5678" required>
+        </div>
+        <button id="sendCodeBtn" class="primary" type="submit">Send code</button>
+        <div id="recaptcha-container"></div>
       </form>
-
-      <button id="googleBtn" class="google" type="button">Continue with Google</button>
+      <form id="verifyForm" class="code-form" novalidate>
+        <label for="codeInput">Verification code</label>
+        <input id="codeInput" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456">
+        <button id="verifyBtn" class="primary" type="submit">Verify and continue</button>
+        <button id="changeNumberBtn" class="text-button" type="button">Change number</button>
+      </form>
       <p id="authMessage" class="message" role="status"></p>
-
-      <div class="switch-auth">Don't have an account? <a href="signup.html">Create one</a></div>
     </section>
   </main>
   <script type="module" src="auth.js"></script>
