@@ -18,13 +18,14 @@ messaging.onBackgroundMessage(payload=>{
   const title=data.title||notification.title||"MeAndYou";
   const body=data.body||notification.body||"New message";
   const url=data.url||"chat.html";
+  const messageId=data.messageId||"";
 
   self.registration.showNotification(title,{
     body,
     icon:"/favicon.png",
     badge:"/favicon.png",
     tag:data.tag||"meandyou-message",
-    data:{url}
+    data:{url,messageId,senderId:data.senderId||"",receiverId:data.receiverId||""}
   });
 });
 
