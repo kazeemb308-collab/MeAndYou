@@ -10,12 +10,14 @@ form?.addEventListener("submit",async e=>{e.preventDefault();show("Working…");
 try{
 const usernameEl=document.getElementById("username");
 if(usernameEl){
+const name=document.getElementById("name").value.trim();
+if(!name)return show("Enter your name.","error");
 let username=usernameEl.value.trim().toLowerCase().replace(/^@/,"");
 if(!/^[a-z0-9_]{3,20}$/.test(username))return show("Username must be 3–20 characters: letters, numbers or _.","error");
 const email=document.getElementById("email").value.trim(),password=document.getElementById("password").value;
 const existing=await getDoc(doc(db,"usernames",username)); if(existing.exists())return show("That username is already taken.","error");
-const r=await createUserWithEmailAndPassword(auth,email,password); await updateProfile(r.user,{displayName:username});
-await setDoc(doc(db,"users",r.user.uid),{uid:r.user.uid,username,email,createdAt:new Date().toISOString()});
+const r=await createUserWithEmailAndPassword(auth,email,password); await updateProfile(r.user,{displayName:name});
+await setDoc(doc(db,"users",r.user.uid),{uid:r.user.uid,name,username,email,createdAt:new Date().toISOString()});
 await setDoc(doc(db,"usernames",username),{uid:r.user.uid});
 }else{
 let id=document.getElementById("loginId").value.trim().toLowerCase().replace(/^@/,"");
