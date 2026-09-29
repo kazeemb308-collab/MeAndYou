@@ -78,7 +78,8 @@ form?.addEventListener("submit", async (e) => {
       });
 
       await setDoc(doc(db, "usernames", username), {
-        uid: result.user.uid
+        uid: result.user.uid,
+        email
       });
 
     } else {
@@ -89,10 +90,12 @@ form?.addEventListener("submit", async (e) => {
         const snap = await getDoc(doc(db, "usernames", id));
         if (!snap.exists()) return show("Username not found.", "error");
 
-        const userProfile = await getDoc(doc(db, "users", snap.data().uid));
-        if (!userProfile.exists()) return show("Account profile not found.", "error");
+        const usernameData = snap.data();
+        if (!usernameData.email) {
+          return show("This username needs to be updated. Log in with your email once, then try the username again.", "error");
+        }
 
-        email = userProfile.data().email;
+        email = usernameData.email;
       }
 
       await signInWithEmailAndPassword(
