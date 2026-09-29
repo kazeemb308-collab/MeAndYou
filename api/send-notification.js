@@ -63,10 +63,6 @@ export default async function handler(req,res){
 
     const messages=tokens.map(token=>({
       token,
-      notification:{
-        title:senderName,
-        body
-      },
       data:{
         title:senderName,
         body,
@@ -77,15 +73,11 @@ export default async function handler(req,res){
         tag:"meandyou-"+messageSnap.id
       },
       webpush:{
-        notification:{
-          title:senderName,
-          body,
-          icon:"/favicon.png",
-          badge:"/favicon.png",
-          tag:"meandyou-"+messageSnap.id
-        },
         fcmOptions:{
           link:new URL(chatUrl,"https://meandyou.vercel.app").href
+        },
+        headers:{
+          TTL:"86400"
         }
       }
     }));
@@ -101,7 +93,7 @@ export default async function handler(req,res){
     });
 
     for(const token of invalid){
-      const docs=await tokensSnap.docs.filter(d=>d.data().token===token);
+      const docs=tokensSnap.docs.filter(d=>d.data().token===token);
       for(const d of docs)await d.ref.delete();
     }
 
