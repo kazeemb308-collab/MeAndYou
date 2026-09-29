@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
-import { getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp, getDoc, getDocs, updateDoc, writeBatch, doc } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp, getDoc, getDocs, updateDoc, setDoc, writeBatch, doc } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
 const firebaseConfig={apiKey:"AIzaSyBzuctjdTAHT3kxdrIZz9aGe5mGLsiGwx4",authDomain:"m3ss3nger-50a21.firebaseapp.com",projectId:"m3ss3nger-50a21",storageBucket:"m3ss3nger-50a21.firebasestorage.app",messagingSenderId:"245814154474",appId:"1:245814154474:web:4592f3a7e272154396f393"};
 const app=initializeApp(firebaseConfig);
@@ -19,10 +19,11 @@ const makeConversationId=(a,b)=>[a,b].sort().join("_");
 async function setPresence(online){
  try{
   if(!currentUser)return;
-  await updateDoc(doc(db,"users",currentUser.uid),{
+  await setDoc(doc(db,"users",currentUser.uid),{
    online,
-   lastSeen:serverTimestamp()
-  });
+   lastSeen:serverTimestamp(),
+   updatedAt:serverTimestamp()
+  },{merge:true});
  }catch(error){
   console.warn("Presence update failed:",error);
  }
@@ -63,11 +64,19 @@ function formatLastSeen(value){
 
 function listenForOtherPresence(){
  if(presenceUnsubscribe)presenceUnsubscribe();
+ roomUsername.textContent="checking status…";
  presenceUnsubscribe=onSnapshot(doc(db,"users",otherUid),snap=>{
-  if(!snap.exists())return;
+  if(!snap.exists()){
+   roomUsername.textContent="@"+otherUsername;
+   return;
+  }
   const data=snap.data();
-  const isFresh=data.online===true&&(!data.lastSeen?.toDate||Date.now()-data.lastSeen.toDate().getTime()<90000);
+  const lastSeen=data.lastSeen?.toDate?.();
+  const isFresh=data.online===true&&(!lastSeen||Date.now()-lastSeen.getTime()<90000);
   roomUsername.textContent=isFresh?"online":formatLastSeen(data.lastSeen);
+ },error=>{
+  console.warn("Presence listener failed:",error);
+  roomUsername.textContent="@"+otherUsername;
  });
 }
 
