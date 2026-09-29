@@ -137,7 +137,8 @@ async function startRecording(){
    previewDuration.textContent=formatTime((Date.now()-recordingStarted)/1000);
    buildWave();
    recordingBar.hidden=true;
-   voicePreview.hidden=false
+   voicePreview.hidden=false;
+   if(!isLocked) sendRecordedVoice()
   };
   recorder.start(200);
   recordingTimer=setInterval(()=>recordingTime.textContent=formatTime((Date.now()-recordingStarted)/1000),250)
