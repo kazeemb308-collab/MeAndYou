@@ -1,7 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
-import { getMessaging, getToken, onMessage, isSupported } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-messaging.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
-import { getFirestore, doc, setDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
 const firebaseConfig={
   apiKey:"AIzaSyBzuctjdTAHT3kxdrIZz9aGe5mGLsiGwx4",
@@ -14,71 +13,63 @@ const firebaseConfig={
 
 export const VAPID_PUBLIC_KEY="BJv9WNXXxTchu-645ZD8Ung8YaUiTOGp2260AaPfzqMxuBdufSXVbzBS-BdY6ams-th2GAAcAG0PzF0D3k6pHtg";
 
-const app=initializeApp(firebaseConfig,"notifications");
+const app=initializeApp(firebaseConfig,"push");
 const auth=getAuth(app);
 const db=getFirestore(app);
 
-let messagingPromise=null;
+function keyId(subscription){
+  return btoa(subscription.endpoint).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+}
 
-async function getMessagingInstance(){
-  if(messagingPromise)return messagingPromise;
-  messagingPromise=isSupported().then(ok=>ok?getMessaging(app):null);
-  return messagingPromise;
+function urlBase64ToUint8Array(base64String){
+  const padding="=".repeat((4-(base64String.length%4))%4);
+  const base64=(base64String+padding).replace(/-/g,"+").replace(/_/g,"/");
+  const raw=atob(base64);
+  return Uint8Array.from([...raw].map(char=>char.charCodeAt(0)));
+}
+
+async function getRegistration(){
+  if(!("serviceWorker" in navigator))throw new Error("Service workers are not supported here.");
+  const registration=await navigator.serviceWorker.register("/firebase-messaging-sw.js",{scope:"/"});
+  await navigator.serviceWorker.ready;
+  return registration;
 }
 
 export async function enableNotifications(){
-  if(!("Notification" in window))throw new Error("Notifications are not supported here.");
-  const permission=await Notification.requestPermission();
-  if(permission!=="granted")return {permission,token:null};
-
-  if(!("serviceWorker" in navigator))throw new Error("Service workers are not supported here.");
-
-  const messaging=await getMessagingInstance();
-  if(!messaging)throw new Error("Push notifications are not supported by this browser.");
-
-  const registration=await navigator.serviceWorker.register("/firebase-messaging-sw.js",{scope:"/"});
-  await navigator.serviceWorker.ready;
-
-  const token=await getToken(messaging,{
-    vapidKey:VAPID_PUBLIC_KEY,
-    serviceWorkerRegistration:registration
-  });
-
-  if(!token)throw new Error("Firebase did not return a notification token.");
-
   const user=auth.currentUser;
   if(!user)throw new Error("You must be signed in.");
+  if(!("Notification" in window)||!("PushManager" in window))throw new Error("Push notifications are not supported here.");
+  const permission=await Notification.requestPermission();
+  if(permission!=="granted")return {permission,subscription:null};
 
+  const registration=await getRegistration();
+  let subscription=await registration.pushManager.getSubscription();
+
+  if(!subscription){
+    subscription=await registration.pushManager.subscribe({
+      userVisibleOnly:true,
+      applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    });
+  }
+
+  const data=subscription.toJSON();
   await setDoc(
-    doc(db,"users",user.uid,"notificationTokens",encodeTokenId(token)),
-    {token,platform:"web",updatedAt:serverTimestamp()},
+    doc(db,"users",user.uid,"pushSubscriptions",keyId(subscription)),
+    {subscription:data,platform:"web",updatedAt:new Date().toISOString()},
     {merge:true}
   );
 
-  return {permission,token};
+  return {permission,subscription};
 }
 
 export async function removeCurrentNotificationToken(){
   const user=auth.currentUser;
-  if(!user)return;
-  const messaging=await getMessagingInstance();
-  if(!messaging)return;
-  const registration=await navigator.serviceWorker.getRegistration("/firebase-messaging-sw.js");
-  if(!registration)return;
-  try{
-    const token=await getToken(messaging,{vapidKey:VAPID_PUBLIC_KEY,serviceWorkerRegistration:registration});
-    if(token)await deleteDoc(doc(db,"users",user.uid,"notificationTokens",encodeTokenId(token)));
-  }catch(error){
-    console.error("Notification token removal error:",error);
-  }
+  if(!user||!("serviceWorker" in navigator))return;
+  const registration=await navigator.serviceWorker.getRegistration("/");
+  const subscription=await registration?.pushManager.getSubscription();
+  if(subscription)await deleteDoc(doc(db,"users",user.uid,"pushSubscriptions",keyId(subscription)));
 }
 
-export async function listenForForegroundMessages(callback){
-  const messaging=await getMessagingInstance();
-  if(!messaging)return ()=>{};
-  return onMessage(messaging,payload=>callback(payload));
-}
-
-function encodeTokenId(token){
-  return btoa(token).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+export async function listenForForegroundMessages(){
+  return ()=>{};
 }
