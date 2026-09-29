@@ -18,10 +18,17 @@ let currentUser=null,unsubscribe=null,presenceUnsubscribe=null,presenceHeartbeat
 const renderedMessages=new Map();
 const makeConversationId=(a,b)=>[a,b].sort().join("_");
 
-async function startPresence(){
+let presenceConnectionUnsubscribe=null;
+let lastSeenRefreshTimer=null;
+
+function presenceRefFor(uid){
+ return rtdbRef(realtimeDb,"presence/"+uid);
+}
+
+async function setPresenceOnline(){
  if(!currentUser)return;
+ const presenceRef=presenceRefFor(currentUser.uid);
  try{
-  const presenceRef=rtdbRef(realtimeDb,"presence/"+currentUser.uid);
   await onDisconnect(presenceRef).set({
    online:false,
    lastSeen:rtdbServerTimestamp()
@@ -31,28 +38,50 @@ async function startPresence(){
    lastSeen:rtdbServerTimestamp()
   });
  }catch(error){
-  console.warn("Realtime presence failed:",error);
+  console.warn("Could not set online presence:",error);
  }
 }
 
-function stopPresence(){
+function setPresenceOffline(){
  if(!currentUser)return;
- rtdbSet(rtdbRef(realtimeDb,"presence/"+currentUser.uid),{
+ rtdbSet(presenceRefFor(currentUser.uid),{
   online:false,
   lastSeen:rtdbServerTimestamp()
- }).catch(()=>{});
+ }).catch(error=>console.warn("Could not set offline presence:",error));
+}
+
+function startPresence(){
+ if(!currentUser)return;
+ presenceConnectionUnsubscribe?.();
+ const connectedRef=rtdbRef(realtimeDb,".info/connected");
+ presenceConnectionUnsubscribe=onValue(connectedRef,snapshot=>{
+  if(snapshot.val()===true)setPresenceOnline();
+ });
+}
+
+function stopPresence(){
+ presenceConnectionUnsubscribe?.();
+ presenceConnectionUnsubscribe=null;
+ setPresenceOffline();
 }
 
 function listenForOtherPresence(){
  if(presenceUnsubscribe)presenceUnsubscribe();
  roomUsername.textContent="checking status…";
- presenceUnsubscribe=onValue(rtdbRef(realtimeDb,"presence/"+otherUid),snap=>{
+ presenceUnsubscribe=onValue(presenceRefFor(otherUid),snap=>{
   const data=snap.val()||{};
   roomUsername.textContent=data.online===true?"online":formatLastSeenValue(data.lastSeen);
  },error=>{
   console.warn("Realtime presence listener failed:",error);
   roomUsername.textContent="@"+otherUsername;
  });
+ clearInterval(lastSeenRefreshTimer);
+ lastSeenRefreshTimer=setInterval(async()=>{
+  const snap=await new Promise(resolve=>onValue(presenceRefFor(otherUid),resolve,{onlyOnce:true})).catch(()=>null);
+  if(!snap)return;
+  const data=snap.val()||{};
+  if(data.online!==true)roomUsername.textContent=formatLastSeenValue(data.lastSeen);
+ },30000);
 }
 
 function formatLastSeenValue(value){
@@ -68,6 +97,13 @@ function formatLastSeenValue(value){
  return `last seen ${days} days ago`;
 }
 
+function handlePresenceVisibility(){
+ if(document.visibilityState==="visible"){
+  setPresenceOnline();
+ }else{
+  setPresenceOffline();
+ }
+}
 
 async function markMessagesRead(){
  try{
@@ -119,6 +155,7 @@ onAuthStateChanged(auth,async user=>{
   if(!profile.exists()){location.href="login.html";return}
   startPresence();
   listenForOtherPresence();
+  document.addEventListener("visibilitychange",handlePresenceVisibility);
   listenForMessages();
  }catch(e){console.error(e);showMessageError()}
 });
