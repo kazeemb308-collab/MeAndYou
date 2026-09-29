@@ -43,7 +43,7 @@ voiceButton.addEventListener("pointerdown",e=>{e.preventDefault();voiceButton.se
 voiceButton.addEventListener("pointerup",e=>{if(!isLocked){e.preventDefault();stopRecording()}});
 voiceButton.addEventListener("pointercancel",()=>{if(!isLocked)stopRecording()});
 voiceButton.addEventListener("pointerleave",()=>{});
-lockRecord.addEventListener("click",()=>{isLocked=true;recordingHint.textContent="Recording locked";lockRecord.style.display="none"});
+lockRecord.addEventListener("click",()=>{if(!recorder)return;isLocked=true;recordingHint.textContent="Finishing recording…";lockRecord.style.display="none";stopRecording()});
 cancelRecord.addEventListener("click",resetRecording);
 discardVoice.addEventListener("click",resetRecording);
 playVoice.addEventListener("click",()=>{if(!audioUrl)return;if(audio.paused){audio.src=audioUrl;audio.play();playVoiceIcon.innerHTML=escIconPause}else{audio.pause();playVoiceIcon.innerHTML=escIconPlay}});
