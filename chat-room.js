@@ -12,7 +12,7 @@ roomName.textContent=otherName;roomUsername.textContent="@"+otherUsername;roomAv
 document.getElementById("backButton").addEventListener("click",()=>location.href="chat.html");
 if(!otherUid){form.style.display="none";throw new Error("Missing recipient uid");}
 
-let currentUser=null,unsubscribe=null,recorder=null,microphoneStream=null,recordedChunks=[],recordingStarted=0,recordingTimer=null,isLocked=false,audioBlob=null,audioUrl=null,audio=new Audio(),recordingMime="";
+let currentUser=null,unsubscribe=null,recorder=null,microphoneStream=null,recordedChunks=[],recordingStarted=0,recordingTimer=null,isLocked=false,audioBlob=null,audioUrl=null,audio=new Audio(),recordingMime="",recordingStarting=false,abortRecording=false,pointerHeld=false;
 const renderedMessages=new Map();
 const makeConversationId=(a,b)=>[a,b].sort().join("_");
 const formatTime=s=>{s=Math.max(0,Math.floor(s));return Math.floor(s/60)+":"+String(s%60).padStart(2,"0")};
@@ -113,15 +113,19 @@ function supportedMime(){
 }
 
 async function startRecording(){
- if(recorder||audioBlob)return;
+ if(recorder||audioBlob||recordingStarting)return;
+ recordingStarting=true;
+ abortRecording=false;
  if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder){alert("Voice recording is not supported by this browser.");return}
  try{
   if(!microphoneStream){
    microphoneStream=await navigator.mediaDevices.getUserMedia({audio:true});
   }
+  if(!pointerHeld){ recordingStarting=false; return; }
   const stream=microphoneStream;
   recordingMime=supportedMime();
   recorder=new MediaRecorder(stream,recordingMime?{mimeType:recordingMime}:undefined);
+  recordingStarting=false;
   recordedChunks=[];
   isLocked=false;
   recordingStarted=Date.now();
@@ -132,6 +136,15 @@ async function startRecording(){
   recorder.onstop=async()=>{
    clearInterval(recordingTimer);
    recorder=null;
+   if(abortRecording){
+    recordedChunks=[];
+    audioBlob=null;
+    recordingBar.hidden=true;
+    voicePreview.hidden=true;
+    abortRecording=false;
+    isLocked=false;
+    return
+   }
    if(!recordedChunks.length){resetRecording();return}
    audioBlob=new Blob(recordedChunks,{type:recordingMime||"audio/webm"});
    audioUrl=URL.createObjectURL(audioBlob);
@@ -155,7 +168,11 @@ function stopRecording(){
 }
 
 function resetRecording(){
- if(recorder&&recorder.state!=="inactive")recorder.stop();
+ abortRecording=true;
+ if(recorder&&recorder.state!=="inactive"){
+  recorder.stop();
+  return;
+ }
  recorder=null;
  recordedChunks=[];
  clearInterval(recordingTimer);
@@ -189,7 +206,7 @@ function blobToDataUrl(blob){
 }
 
 async function sendRecordedVoice(){
- if(!audioBlob||!currentUser)return;
+ if(!audioBlob||!currentUser||abortRecording)return;
  sendVoice.disabled=true;
  try{
   // Firestore documents are limited to about 1 MiB, so keep voice notes short.
@@ -222,6 +239,7 @@ let lockedHandsFree=false;
 
 voiceButton.addEventListener("pointerdown",async e=>{
  e.preventDefault();
+ pointerHeld=true;
  activePointerId=e.pointerId;
  pointerStartY=e.clientY;
  lockedHandsFree=false;
@@ -244,13 +262,21 @@ voiceButton.addEventListener("pointerup",e=>{
  if(e.pointerId!==activePointerId)return;
  e.preventDefault();
  activePointerId=null;
- if(!isLocked)stopRecording();
+ pointerHeld=false;
+ if(!isLocked){
+  if(recorder)stopRecording();
+  else if(recordingStarting)abortRecording=true;
+ }
 });
 
 voiceButton.addEventListener("pointercancel",e=>{
  if(e.pointerId!==activePointerId)return;
  activePointerId=null;
- if(!isLocked)stopRecording();
+ pointerHeld=false;
+ if(!isLocked){
+  if(recorder)stopRecording();
+  else if(recordingStarting)abortRecording=true;
+ }
 });
 
 lockRecord.addEventListener("click",()=>{
