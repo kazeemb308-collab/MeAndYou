@@ -1,10 +1,12 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
+import { getDatabase, ref as rtdbRef, onValue, onDisconnect, set as rtdbSet, serverTimestamp as rtdbServerTimestamp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
 import { getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp, getDoc, getDocs, updateDoc, setDoc, writeBatch, doc } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
 const firebaseConfig={apiKey:"AIzaSyBzuctjdTAHT3kxdrIZz9aGe5mGLsiGwx4",authDomain:"m3ss3nger-50a21.firebaseapp.com",projectId:"m3ss3nger-50a21",storageBucket:"m3ss3nger-50a21.firebasestorage.app",messagingSenderId:"245814154474",appId:"1:245814154474:web:4592f3a7e272154396f393"};
 const app=initializeApp(firebaseConfig);
 const auth=getAuth(app),db=getFirestore(app);
+const realtimeDb=getDatabase(app,"https://m3ss3nger-50a21-default-rtdb.firebaseio.com");
 const params=new URLSearchParams(location.search);
 const otherUid=params.get("uid"),otherUsername=params.get("username")||"username",otherName=params.get("name")||"User";
 const roomName=document.getElementById("roomName"),roomUsername=document.getElementById("roomUsername"),roomAvatar=document.getElementById("roomAvatar"),messages=document.getElementById("messages"),emptyRoom=document.getElementById("emptyRoom"),form=document.getElementById("messageForm"),input=document.getElementById("messageInput"),voiceButton=document.getElementById("voiceButton"),sendButton=document.getElementById("sendButton"),recordingBar=document.getElementById("recordingBar"),recordingTime=document.getElementById("recordingTime"),recordingHint=document.getElementById("recordingHint"),cancelRecord=document.getElementById("cancelRecord"),lockRecord=document.getElementById("lockRecord"),voicePreview=document.getElementById("voicePreview"),discardVoice=document.getElementById("discardVoice"),playVoice=document.getElementById("playVoice"),sendVoice=document.getElementById("sendVoice"),previewDuration=document.getElementById("previewDuration"),previewWave=document.getElementById("previewWave"),playVoiceIcon=document.getElementById("playVoiceIcon");
@@ -16,36 +18,54 @@ let currentUser=null,unsubscribe=null,presenceUnsubscribe=null,presenceHeartbeat
 const renderedMessages=new Map();
 const makeConversationId=(a,b)=>[a,b].sort().join("_");
 
-async function setPresence(online){
+async function startPresence(){
+ if(!currentUser)return;
  try{
-  if(!currentUser)return;
-  await setDoc(doc(db,"users",currentUser.uid),{
-   online,
-   lastSeen:serverTimestamp(),
-   updatedAt:serverTimestamp()
-  },{merge:true});
+  const presenceRef=rtdbRef(realtimeDb,"presence/"+currentUser.uid);
+  await onDisconnect(presenceRef).set({
+   online:false,
+   lastSeen:rtdbServerTimestamp()
+  });
+  await rtdbSet(presenceRef,{
+   online:true,
+   lastSeen:rtdbServerTimestamp()
+  });
  }catch(error){
-  console.warn("Presence update failed:",error);
+  console.warn("Realtime presence failed:",error);
  }
 }
 
-function startPresence(){
- setPresence(true);
- clearInterval(presenceHeartbeat);
- presenceHeartbeat=setInterval(()=>{
-  if(document.visibilityState==="visible")setPresence(true);
- },25000);
- document.addEventListener("visibilitychange",handleVisibility);
- window.addEventListener("pagehide",handlePageHide);
+function stopPresence(){
+ if(!currentUser)return;
+ rtdbSet(rtdbRef(realtimeDb,"presence/"+currentUser.uid),{
+  online:false,
+  lastSeen:rtdbServerTimestamp()
+ }).catch(()=>{});
 }
 
-function handleVisibility(){
- if(document.visibilityState==="visible")setPresence(true);
- else setPresence(false);
+function listenForOtherPresence(){
+ if(presenceUnsubscribe)presenceUnsubscribe();
+ roomUsername.textContent="checking status…";
+ presenceUnsubscribe=onValue(rtdbRef(realtimeDb,"presence/"+otherUid),snap=>{
+  const data=snap.val()||{};
+  roomUsername.textContent=data.online===true?"online":formatLastSeenValue(data.lastSeen);
+ },error=>{
+  console.warn("Realtime presence listener failed:",error);
+  roomUsername.textContent="@"+otherUsername;
+ });
 }
 
-function handlePageHide(){
- setPresence(false);
+function formatLastSeenValue(value){
+ if(typeof value!=="number")return "last seen recently";
+ const diff=Math.max(0,Date.now()-value);
+ const minutes=Math.floor(diff/60000);
+ if(minutes<1)return "last seen just now";
+ if(minutes<60)return `last seen ${minutes} min ago`;
+ const hours=Math.floor(minutes/60);
+ if(hours<24)return `last seen ${hours} hr ago`;
+ const days=Math.floor(hours/24);
+ if(days===1)return "last seen yesterday";
+ return `last seen ${days} days ago`;
 }
 
 function formatLastSeen(value){
@@ -419,6 +439,7 @@ window.addEventListener("beforeunload",()=>{
  unsubscribe?.();
  presenceUnsubscribe?.();
  clearInterval(presenceHeartbeat);
+ stopPresence();
  document.removeEventListener("visibilitychange",handleVisibility);
  window.removeEventListener("pagehide",handlePageHide);
  microphoneStream?.getTracks().forEach(t=>t.stop());
