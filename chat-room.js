@@ -1,221 +1,52 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
 import { getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp, getDoc, doc } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-storage.js";
 
-const firebaseConfig={
-  apiKey:"AIzaSyBzuctjdTAHT3kxdrIZz9aGe5mGLsiGwx4",
-  authDomain:"m3ss3nger-50a21.firebaseapp.com",
-  projectId:"m3ss3nger-50a21",
-  storageBucket:"m3ss3nger-50a21.firebasestorage.app",
-  messagingSenderId:"245814154474",
-  appId:"1:245814154474:web:4592f3a7e272154396f393"
-};
-
+const firebaseConfig={apiKey:"AIzaSyBzuctjdTAHT3kxdrIZz9aGe5mGLsiGwx4",authDomain:"m3ss3nger-50a21.firebaseapp.com",projectId:"m3ss3nger-50a21",storageBucket:"m3ss3nger-50a21.firebasestorage.app",messagingSenderId:"245814154474",appId:"1:245814154474:web:4592f3a7e272154396f393"};
 const app=initializeApp(firebaseConfig);
-const auth=getAuth(app);
-const db=getFirestore(app);
-
+const auth=getAuth(app),db=getFirestore(app),storage=getStorage(app);
 const params=new URLSearchParams(location.search);
-const otherUid=params.get("uid");
-const otherUsername=params.get("username") || "username";
-const otherName=params.get("name") || "User";
-
-const roomName=document.getElementById("roomName");
-const roomUsername=document.getElementById("roomUsername");
-const roomAvatar=document.getElementById("roomAvatar");
-const messages=document.getElementById("messages");
-const emptyRoom=document.getElementById("emptyRoom");
-const form=document.getElementById("messageForm");
-const input=document.getElementById("messageInput");
-
-roomName.textContent=otherName;
-roomUsername.textContent="@"+otherUsername;
-roomAvatar.textContent=otherName.charAt(0).toUpperCase();
-
-document.getElementById("backButton").addEventListener("click",()=>{
-  location.href="chat.html";
-});
-
-if(!otherUid){
-  roomName.textContent="Invalid chat";
-  roomUsername.textContent="";
-  form.style.display="none";
-  throw new Error("Missing recipient uid");
-}
-
-let currentUser=null;
-let unsubscribe=null;
+const otherUid=params.get("uid"),otherUsername=params.get("username")||"username",otherName=params.get("name")||"User";
+const roomName=document.getElementById("roomName"),roomUsername=document.getElementById("roomUsername"),roomAvatar=document.getElementById("roomAvatar"),messages=document.getElementById("messages"),emptyRoom=document.getElementById("emptyRoom"),form=document.getElementById("messageForm"),input=document.getElementById("messageInput"),voiceButton=document.getElementById("voiceButton"),sendButton=document.getElementById("sendButton"),recordingBar=document.getElementById("recordingBar"),recordingTime=document.getElementById("recordingTime"),recordingHint=document.getElementById("recordingHint"),cancelRecord=document.getElementById("cancelRecord"),lockRecord=document.getElementById("lockRecord"),voicePreview=document.getElementById("voicePreview"),discardVoice=document.getElementById("discardVoice"),playVoice=document.getElementById("playVoice"),sendVoice=document.getElementById("sendVoice"),previewDuration=document.getElementById("previewDuration"),previewWave=document.getElementById("previewWave"),playVoiceIcon=document.getElementById("playVoiceIcon");
+roomName.textContent=otherName;roomUsername.textContent="@"+otherUsername;roomAvatar.textContent=otherName.charAt(0).toUpperCase();
+document.getElementById("backButton").addEventListener("click",()=>location.href="chat.html");
+if(!otherUid){form.style.display="none";throw new Error("Missing recipient uid");}
+let currentUser=null,unsubscribe=null,recorder=null,recordedChunks=[],recordingStarted=0,recordingTimer=null,isLocked=false,audioBlob=null,audioUrl=null,audio=new Audio(),recordingMime="";
 const renderedMessages=new Map();
+const makeConversationId=(a,b)=>[a,b].sort().join("_");
+const formatTime=s=>{s=Math.max(0,Math.floor(s));return Math.floor(s/60)+":"+String(s%60).padStart(2,"0")};
+const escIconPlay='<path d="m8 5 11 7-11 7V5Z"/>';
+const escIconPause='<path d="M8 5v14M16 5v14"/>';
+function setComposer(){const hasText=input.value.trim().length>0;sendButton.hidden=!hasText;voiceButton.hidden=hasText}
+input.addEventListener("input",setComposer);setComposer();
 
 onAuthStateChanged(auth,async user=>{
-  if(!user){
-    location.href="login.html";
-    return;
-  }
-
-  currentUser=user;
-
-  try{
-    const profile=await getDoc(doc(db,"users",user.uid));
-    if(!profile.exists()){
-      location.href="login.html";
-      return;
-    }
-
-    listenForMessages();
-  }catch(error){
-    console.error("Profile error:",error);
-    showMessageError();
-  }
+ if(!user){location.href="login.html";return} currentUser=user;
+ try{const profile=await getDoc(doc(db,"users",user.uid));if(!profile.exists()){location.href="login.html";return}listenForMessages()}catch(e){console.error(e);showMessageError()}
 });
+function listenForMessages(){const q=query(collection(db,"messages"),where("conversationId","==",makeConversationId(currentUser.uid,otherUid)));unsubscribe=onSnapshot(q,snapshot=>{if(snapshot.empty){emptyRoom.style.display="block";return}emptyRoom.style.display="none";snapshot.docChanges().forEach(change=>{if(change.type==="removed"){renderedMessages.get(change.doc.id)?.remove();renderedMessages.delete(change.doc.id);return}const data={id:change.doc.id,...change.doc.data()};const old=renderedMessages.get(data.id);old?updateMessageOnScreen(old,data):addMessageToScreen(data)});sortRenderedMessages();if(snapshot.docChanges().some(c=>c.type==="added"||c.type==="modified"))scrollToBottom()},showMessageError)}
+function showMessageError(){emptyRoom.style.display="block";emptyRoom.querySelector("h2").textContent="Messages unavailable";emptyRoom.querySelector("p").textContent="Please check your Firestore messages read rule."}
+function addMessageToScreen(data){const row=document.createElement("div");row.className="message-row "+(data.senderId===currentUser.uid?"sent":"received");row.dataset.messageTime=data.createdAt?.toMillis?data.createdAt.toMillis():Date.now();const bubble=document.createElement("div");bubble.className="message-bubble";if(data.type==="voice"){const player=document.createElement("audio");player.controls=true;player.preload="metadata";player.src=data.audioUrl||"";player.className="voice-message";bubble.appendChild(player)}else{bubble.append(document.createTextNode(data.text||""))}const time=document.createElement("span");time.className="message-time";time.textContent=data.createdAt?.toDate?data.createdAt.toDate().toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}):"Sending…";bubble.appendChild(time);row.appendChild(bubble);messages.appendChild(row);renderedMessages.set(data.id,row)}
+function updateMessageOnScreen(row,data){const bubble=row.querySelector(".message-bubble");if(!bubble)return;if(data.type==="voice"&&!bubble.querySelector("audio")){bubble.textContent="";const a=document.createElement("audio");a.controls=true;a.preload="metadata";a.src=data.audioUrl||"";a.className="voice-message";bubble.appendChild(a)}const time=bubble.querySelector(".message-time");if(time&&data.createdAt?.toDate)time.textContent=data.createdAt.toDate().toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}
+function sortRenderedMessages(){[...renderedMessages.values()].sort((a,b)=>(Number(a.dataset.messageTime)||0)-(Number(b.dataset.messageTime)||0)).forEach(r=>messages.appendChild(r))}
+function scrollToBottom(){requestAnimationFrame(()=>messages.scrollTop=messages.scrollHeight)}
+form.addEventListener("submit",async e=>{e.preventDefault();const text=input.value.trim();if(!text||!currentUser)return;sendButton.disabled=true;try{await addDoc(collection(db,"messages"),{conversationId:makeConversationId(currentUser.uid,otherUid),senderId:currentUser.uid,receiverId:otherUid,text,type:"text",createdAt:serverTimestamp()});input.value="";setComposer();input.focus()}catch(e){console.error(e);alert("Message could not be sent. Check your Firestore rules.")}finally{sendButton.disabled=false}});
 
-function makeConversationId(a,b){
-  return [a,b].sort().join("_");
-}
-
-function listenForMessages(){
-  const conversationId=makeConversationId(currentUser.uid,otherUid);
-
-  // Only filter by conversationId here.
-  // Sorting is done in JavaScript so the chat works without a composite Firestore index.
-  const messagesQuery=query(
-    collection(db,"messages"),
-    where("conversationId","==",conversationId)
-  );
-
-  unsubscribe=onSnapshot(messagesQuery,snapshot=>{
-    if(snapshot.empty){
-      emptyRoom.style.display="block";
-      emptyRoom.querySelector("h2").textContent="Start your conversation";
-      emptyRoom.querySelector("p").textContent="Send a message to begin.";
-      return;
-    }
-
-    emptyRoom.style.display="none";
-
-    const removedIds=new Set();
-    snapshot.docChanges().forEach(change=>{
-      if(change.type==="removed"){
-        removedIds.add(change.doc.id);
-        const row=renderedMessages.get(change.doc.id);
-        row?.remove();
-        renderedMessages.delete(change.doc.id);
-        return;
-      }
-
-      const data={id:change.doc.id,...change.doc.data()};
-      const existing=renderedMessages.get(data.id);
-      if(existing){
-        updateMessageOnScreen(existing,data);
-      }else{
-        addMessageToScreen(data);
-      }
-    });
-
-    sortRenderedMessages();
-    if(snapshot.docChanges().some(change=>change.type==="added" || change.type==="modified")){
-      scrollToBottom();
-    }
-  },error=>{
-    console.error("Message listener error:",error);
-    showMessageError();
-  });
-}
-
-function showMessageError(){
-  emptyRoom.style.display="block";
-  emptyRoom.querySelector("h2").textContent="Messages unavailable";
-  emptyRoom.querySelector("p").textContent="Please check your Firestore messages read rule.";
-}
-
-function addMessageToScreen(data){
-  const row=document.createElement("div");
-  row.className="message-row "+(data.senderId===currentUser.uid?"sent":"received");
-  row.dataset.messageTime=data.createdAt?.toMillis ? data.createdAt.toMillis() : Date.now();
-
-  const bubble=document.createElement("div");
-  bubble.className="message-bubble";
-  bubble.textContent=data.text || "";
-
-  const time=document.createElement("span");
-  time.className="message-time";
-
-  if(data.createdAt?.toDate){
-    time.textContent=data.createdAt.toDate().toLocaleTimeString([],{
-      hour:"numeric",
-      minute:"2-digit"
-    });
-  }else{
-    time.textContent="Sending…";
-  }
-
-  bubble.appendChild(time);
-  row.appendChild(bubble);
-  messages.appendChild(row);
-  renderedMessages.set(data.id,row);
-}
-
-function updateMessageOnScreen(row,data){
-  const bubble=row.querySelector(".message-bubble");
-  const time=row.querySelector(".message-time");
-  if(!bubble || !time) return;
-
-  bubble.firstChild.textContent=data.text || "";
-  if(data.createdAt?.toDate){
-    time.textContent=data.createdAt.toDate().toLocaleTimeString([],{
-      hour:"numeric",
-      minute:"2-digit"
-    });
-  }else{
-    time.textContent="Sending…";
-  }
-}
-
-function sortRenderedMessages(){
-  const rows=[...renderedMessages.entries()];
-  rows.sort(([,a],[,b])=>{
-    const aTime=a.dataset.messageTime ? Number(a.dataset.messageTime) : 0;
-    const bTime=b.dataset.messageTime ? Number(b.dataset.messageTime) : 0;
-    return aTime-bTime;
-  });
-  rows.forEach(([,row])=>messages.appendChild(row));
-}
-
-form.addEventListener("submit",async e=>{
-  e.preventDefault();
-
-  const text=input.value.trim();
-  if(!text || !currentUser) return;
-
-  input.disabled=true;
-
-  try{
-    const conversationId=makeConversationId(currentUser.uid,otherUid);
-
-    await addDoc(collection(db,"messages"),{
-      conversationId,
-      senderId:currentUser.uid,
-      receiverId:otherUid,
-      text,
-      createdAt:serverTimestamp()
-    });
-
-    input.value="";
-    input.focus();
-  }catch(e){
-    console.error("Send message error:",e);
-    alert("Message could not be sent. Check your Firestore rules.");
-  }finally{
-    input.disabled=false;
-  }
-});
-
-function scrollToBottom(){
-  requestAnimationFrame(()=>{
-    messages.scrollTop=messages.scrollHeight;
-  });
-}
-
-window.addEventListener("beforeunload",()=>{
-  unsubscribe?.();
-});
+function supportedMime(){return ["audio/webm;codecs=opus","audio/webm","audio/mp4","audio/ogg;codecs=opus"].find(x=>MediaRecorder.isTypeSupported(x))||""}
+async function startRecording(){if(recorder||audioBlob)return;if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder){alert("Voice recording is not supported by this browser.");return}try{const stream=await navigator.mediaDevices.getUserMedia({audio:true});recordingMime=supportedMime();recorder=new MediaRecorder(stream,recordingMime?{mimeType:recordingMime}:undefined);recordedChunks=[];isLocked=false;recordingStarted=Date.now();recordingBar.hidden=false;voicePreview.hidden=true;recordingHint.textContent="Slide up to lock";recorder.ondataavailable=e=>{if(e.data.size)recordedChunks.push(e.data)};recorder.onstop=()=>{stream.getTracks().forEach(t=>t.stop());clearInterval(recordingTimer);if(!recordedChunks.length){resetRecording();return}audioBlob=new Blob(recordedChunks,{type:recordingMime||"audio/webm"});audioUrl=URL.createObjectURL(audioBlob);previewDuration.textContent=formatTime((Date.now()-recordingStarted)/1000);buildWave();recordingBar.hidden=true;voicePreview.hidden=false};recorder.start(200);recordingTimer=setInterval(()=>recordingTime.textContent=formatTime((Date.now()-recordingStarted)/1000),250)}catch(e){console.error(e);alert("Microphone access was denied or unavailable.")}}
+function stopRecording(){if(recorder&&recorder.state!=="inactive")recorder.stop()}
+function resetRecording(){if(recorder&&recorder.state!=="inactive")recorder.stop();recorder=null;recordedChunks=[];clearInterval(recordingTimer);recordingBar.hidden=true;voicePreview.hidden=true;if(audioUrl){URL.revokeObjectURL(audioUrl);audioUrl=null}audioBlob=null;isLocked=false;recordingTime.textContent="0:00";recordingHint.textContent="Slide up to lock"}
+function buildWave(){previewWave.textContent="";for(let i=0;i<38;i++){const bar=document.createElement("i");bar.style.height=(8+Math.round(Math.random()*22))+"px";previewWave.appendChild(bar)}}
+function sendRecordedVoice(){if(!audioBlob||!currentUser)return;sendVoice.disabled=true;const ext=(audioBlob.type.includes("mp4")||audioBlob.type.includes("m4a"))?"m4a":audioBlob.type.includes("ogg")?"ogg":"webm";const path="voiceNotes/"+currentUser.uid+"/"+Date.now()+"."+ext;const storageRef=ref(storage,path);uploadBytes(storageRef,audioBlob,{contentType:audioBlob.type}).then(getDownloadURL).then(audioUrlValue=>addDoc(collection(db,"messages"),{conversationId:makeConversationId(currentUser.uid,otherUid),senderId:currentUser.uid,receiverId:otherUid,type:"voice",audioUrl:audioUrlValue,audioPath:path,duration:Math.round((Date.now()-recordingStarted)/1000),createdAt:serverTimestamp()})).then(()=>resetRecording()).catch(e=>{console.error(e);alert("Voice note could not be sent. Check Firebase Storage rules.")}).finally(()=>sendVoice.disabled=false)}
+voiceButton.addEventListener("pointerdown",e=>{e.preventDefault();voiceButton.setPointerCapture?.(e.pointerId);startRecording()});
+voiceButton.addEventListener("pointerup",e=>{if(!isLocked){e.preventDefault();stopRecording()}});
+voiceButton.addEventListener("pointercancel",()=>{if(!isLocked)stopRecording()});
+voiceButton.addEventListener("pointerleave",()=>{});
+lockRecord.addEventListener("click",()=>{isLocked=true;recordingHint.textContent="Recording locked";lockRecord.style.display="none"});
+cancelRecord.addEventListener("click",resetRecording);
+discardVoice.addEventListener("click",resetRecording);
+playVoice.addEventListener("click",()=>{if(!audioUrl)return;if(audio.paused){audio.src=audioUrl;audio.play();playVoiceIcon.innerHTML=escIconPause}else{audio.pause();playVoiceIcon.innerHTML=escIconPlay}});
+audio.addEventListener("ended",()=>playVoiceIcon.innerHTML=escIconPlay);
+sendVoice.addEventListener("click",sendRecordedVoice);
+window.addEventListener("beforeunload",()=>unsubscribe?.());
