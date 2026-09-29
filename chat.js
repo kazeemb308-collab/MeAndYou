@@ -112,6 +112,8 @@ onAuthStateChanged(auth,async user=>{
   }
 
   currentUser=user;
+  // Show the Firebase Auth account immediately, then replace it with the Firestore profile name if available.
+  nameEl.textContent=user.displayName || user.email?.split("@")[0] || "Welcome";
   startPresence();
   document.addEventListener("visibilitychange",handlePresenceVisibility);
 
