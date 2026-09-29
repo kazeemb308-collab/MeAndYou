@@ -1,5 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
+import { getDatabase, ref as rtdbRef, onDisconnect, set as rtdbSet, serverTimestamp as rtdbServerTimestamp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
 import { getFirestore, doc, getDoc, setDoc, collection, query, where, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 import { listenForForegroundMessages } from "./notifications.js";
 
@@ -15,6 +16,7 @@ const firebaseConfig={
 const app=initializeApp(firebaseConfig);
 const auth=getAuth(app);
 const db=getFirestore(app);
+const realtimeDb=getDatabase(app,"https://m3ss3nger-50a21-default-rtdb.firebaseio.com");
 
 const nameEl=document.getElementById("currentUserName");
 const searchInput=document.getElementById("searchInput");
@@ -24,29 +26,29 @@ const conversationList=document.getElementById("conversationList");
 let currentUser=null;
 let presenceHeartbeat=null;
 
-async function updatePresence(online){
+async function startPresence(){
   if(!currentUser)return;
   try{
-    await setDoc(doc(db,"users",currentUser.uid),{
-      online,
-      lastSeen:serverTimestamp(),
-      updatedAt:serverTimestamp()
-    },{merge:true});
+    const presenceRef=rtdbRef(realtimeDb,"presence/"+currentUser.uid);
+    await onDisconnect(presenceRef).set({
+      online:false,
+      lastSeen:rtdbServerTimestamp()
+    });
+    await rtdbSet(presenceRef,{
+      online:true,
+      lastSeen:rtdbServerTimestamp()
+    });
   }catch(error){
-    console.warn("Presence update failed:",error);
+    console.warn("Realtime presence failed:",error);
   }
 }
 
-function startPresence(){
-  updatePresence(true);
-  clearInterval(presenceHeartbeat);
-  presenceHeartbeat=setInterval(()=>{
-    if(document.visibilityState==="visible")updatePresence(true);
-  },25000);
-}
-
-function handlePresenceVisibility(){
-  updatePresence(document.visibilityState==="visible");
+function stopPresence(){
+  if(!currentUser)return;
+  rtdbSet(rtdbRef(realtimeDb,"presence/"+currentUser.uid),{
+    online:false,
+    lastSeen:rtdbServerTimestamp()
+  }).catch(()=>{});
 }
 
 
@@ -83,8 +85,6 @@ onAuthStateChanged(auth,async user=>{
 
   currentUser=user;
   startPresence();
-  document.addEventListener("visibilitychange",handlePresenceVisibility);
-  window.addEventListener("pagehide",()=>updatePresence(false));
 
   try{
     const profile=await getDoc(doc(db,"users",user.uid));
@@ -413,6 +413,7 @@ document.getElementById("chatsNavButton")?.addEventListener("click",()=>{
 window.addEventListener("beforeunload",()=>{
   unsubscribeSent?.();
   unsubscribeReceived?.();
+  stopPresence();
 });
 
 
