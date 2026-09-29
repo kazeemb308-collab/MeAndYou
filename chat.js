@@ -327,14 +327,23 @@ document.getElementById("newChatButton")?.addEventListener("click",()=>{
 });
 
 document.getElementById("profileButton")?.addEventListener("click",()=>{
-  alert("Profile settings will be added next.");
+  window.location.href="profile.html";
 });
 
 document.getElementById("profileNavButton")?.addEventListener("click",()=>{
-  alert("Profile settings will be added next.");
+  window.location.href="profile.html";
+});
+
+document.getElementById("chatsNavButton")?.addEventListener("click",()=>{
+  window.location.href="chat.html";
 });
 
 window.addEventListener("beforeunload",()=>{
   unsubscribeSent?.();
   unsubscribeReceived?.();
 });
+
+
+if(location.hash==="#new-chat"){
+  requestAnimationFrame(()=>searchInput?.focus());
+}
