@@ -24,7 +24,9 @@ async function sendPushNotification(messageId){
    headers:{"Content-Type":"application/json"},
    body:JSON.stringify({idToken,messageId})
   });
-  if(!response.ok)console.error("Push notification request failed:",await response.text());
+  const body=await response.text();
+  if(!response.ok)console.error("Push notification request failed:",response.status,body);
+  else console.log("Push notification result:",body);
  }catch(error){
   console.error("Push notification request error:",error);
  }
