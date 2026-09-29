@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
-import { getFirestore, collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp, getDoc, doc } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp, getDoc, doc } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
 const firebaseConfig={
   apiKey:"AIzaSyBzuctjdTAHT3kxdrIZz9aGe5mGLsiGwx4",
@@ -54,13 +54,18 @@ onAuthStateChanged(auth,async user=>{
 
   currentUser=user;
 
-  const profile=await getDoc(doc(db,"users",user.uid));
-  if(!profile.exists()){
-    location.href="login.html";
-    return;
-  }
+  try{
+    const profile=await getDoc(doc(db,"users",user.uid));
+    if(!profile.exists()){
+      location.href="login.html";
+      return;
+    }
 
-  listenForMessages();
+    listenForMessages();
+  }catch(error){
+    console.error("Profile error:",error);
+    showMessageError();
+  }
 });
 
 function makeConversationId(a,b){
@@ -70,10 +75,11 @@ function makeConversationId(a,b){
 function listenForMessages(){
   const conversationId=makeConversationId(currentUser.uid,otherUid);
 
+  // Only filter by conversationId here.
+  // Sorting is done in JavaScript so the chat works without a composite Firestore index.
   const messagesQuery=query(
     collection(db,"messages"),
-    where("conversationId","==",conversationId),
-    orderBy("createdAt","asc")
+    where("conversationId","==",conversationId)
   );
 
   unsubscribe=onSnapshot(messagesQuery,snapshot=>{
@@ -81,23 +87,36 @@ function listenForMessages(){
 
     if(snapshot.empty){
       emptyRoom.style.display="block";
+      emptyRoom.querySelector("h2").textContent="Start your conversation";
+      emptyRoom.querySelector("p").textContent="Send a message to begin.";
       return;
     }
 
     emptyRoom.style.display="none";
 
-    snapshot.forEach(messageDoc=>{
-      const data=messageDoc.data();
-      addMessageToScreen(data);
+    const messageList=snapshot.docs.map(messageDoc=>({
+      id:messageDoc.id,
+      ...messageDoc.data()
+    }));
+
+    messageList.sort((a,b)=>{
+      const aTime=a.createdAt?.toMillis ? a.createdAt.toMillis() : Date.now();
+      const bTime=b.createdAt?.toMillis ? b.createdAt.toMillis() : Date.now();
+      return aTime-bTime;
     });
 
+    messageList.forEach(data=>addMessageToScreen(data));
     scrollToBottom();
   },error=>{
     console.error("Message listener error:",error);
-    emptyRoom.style.display="block";
-    emptyRoom.querySelector("h2").textContent="Messages unavailable";
-    emptyRoom.querySelector("p").textContent="Check your Firestore rules and indexes.";
+    showMessageError();
   });
+}
+
+function showMessageError(){
+  emptyRoom.style.display="block";
+  emptyRoom.querySelector("h2").textContent="Messages unavailable";
+  emptyRoom.querySelector("p").textContent="Please check your Firestore messages read rule.";
 }
 
 function addMessageToScreen(data){
