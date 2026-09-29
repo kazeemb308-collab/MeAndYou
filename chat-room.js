@@ -68,37 +68,6 @@ function formatLastSeenValue(value){
  return `last seen ${days} days ago`;
 }
 
-function formatLastSeen(value){
- const date=value?.toDate?.();
- if(!date)return "last seen recently";
- const diff=Math.max(0,Date.now()-date.getTime());
- const minutes=Math.floor(diff/60000);
- if(minutes<1)return "last seen just now";
- if(minutes<60)return `last seen ${minutes} min ago`;
- const hours=Math.floor(minutes/60);
- if(hours<24)return `last seen ${hours} hr ago`;
- const days=Math.floor(hours/24);
- if(days===1)return "last seen yesterday";
- return `last seen ${days} days ago`;
-}
-
-function listenForOtherPresence(){
- if(presenceUnsubscribe)presenceUnsubscribe();
- roomUsername.textContent="checking status…";
- presenceUnsubscribe=onSnapshot(doc(db,"users",otherUid),snap=>{
-  if(!snap.exists()){
-   roomUsername.textContent="@"+otherUsername;
-   return;
-  }
-  const data=snap.data();
-  const lastSeen=data.lastSeen?.toDate?.();
-  const isFresh=data.online===true&&(!lastSeen||Date.now()-lastSeen.getTime()<90000);
-  roomUsername.textContent=isFresh?"online":formatLastSeen(data.lastSeen);
- },error=>{
-  console.warn("Presence listener failed:",error);
-  roomUsername.textContent="@"+otherUsername;
- });
-}
 
 async function markMessagesRead(){
  try{
