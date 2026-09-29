@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#075e54">
+<title>MeAndYou</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body class="chat-page">
+
+<header class="chat-header">
+  <div class="chat-brand">
+    <div class="logo tiny">M</div>
+    <div>
+      <strong>MeAndYou</strong>
+      <span id="currentUserName">Welcome</span>
+    </div>
+  </div>
+  <button class="header-button" id="profileButton" type="button" aria-label="Profile">⋮</button>
+</header>
+
+<main class="chat-home">
+  <div class="chat-search">
+    <span>⌕</span>
+    <input id="searchInput" type="search" placeholder="Search username" autocomplete="off">
+  </div>
+
+  <section id="searchResults" class="search-results"></section>
+
+  <section class="conversations">
+    <div class="section-title">Messages</div>
+    <div id="conversationList" class="conversation-list">
+      <div class="empty-state">
+        <div class="empty-icon">💬</div>
+        <h2>No conversations yet</h2>
+        <p>Search for a username above to start a new chat.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<nav class="bottom-nav">
+  <button class="nav-item active" type="button">
+    <span>💬</span>
+    <small>Chats</small>
+  </button>
+  <button class="nav-item" id="newChatButton" type="button">
+    <span>＋</span>
+    <small>New chat</small>
+  </button>
+  <button class="nav-item" id="profileNavButton" type="button">
+    <span>👤</span>
+    <small>Profile</small>
+  </button>
+</nav>
+
+<script type="module" src="chat.js"></script>
+</body>
+</html>
