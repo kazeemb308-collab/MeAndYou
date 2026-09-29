@@ -12,9 +12,64 @@ roomName.textContent=otherName;roomUsername.textContent="@"+otherUsername;roomAv
 document.getElementById("backButton").addEventListener("click",()=>location.href="chat.html");
 if(!otherUid){form.style.display="none";throw new Error("Missing recipient uid");}
 
-let currentUser=null,unsubscribe=null,recorder=null,microphoneStream=null,recordedChunks=[],recordingStarted=0,recordingTimer=null,isLocked=false,audioBlob=null,audioUrl=null,audio=new Audio(),recordingMime="",recordingStarting=false,abortRecording=false,pointerHeld=false;
+let currentUser=null,unsubscribe=null,presenceUnsubscribe=null,presenceHeartbeat=null,recorder=null,microphoneStream=null,recordedChunks=[],recordingStarted=0,recordingTimer=null,isLocked=false,audioBlob=null,audioUrl=null,audio=new Audio(),recordingMime="",recordingStarting=false,abortRecording=false,pointerHeld=false;
 const renderedMessages=new Map();
 const makeConversationId=(a,b)=>[a,b].sort().join("_");
+
+async function setPresence(online){
+ try{
+  if(!currentUser)return;
+  await updateDoc(doc(db,"users",currentUser.uid),{
+   online,
+   lastSeen:serverTimestamp()
+  });
+ }catch(error){
+  console.warn("Presence update failed:",error);
+ }
+}
+
+function startPresence(){
+ setPresence(true);
+ clearInterval(presenceHeartbeat);
+ presenceHeartbeat=setInterval(()=>{
+  if(document.visibilityState==="visible")setPresence(true);
+ },25000);
+ document.addEventListener("visibilitychange",handleVisibility);
+ window.addEventListener("pagehide",handlePageHide);
+}
+
+function handleVisibility(){
+ if(document.visibilityState==="visible")setPresence(true);
+ else setPresence(false);
+}
+
+function handlePageHide(){
+ setPresence(false);
+}
+
+function formatLastSeen(value){
+ const date=value?.toDate?.();
+ if(!date)return "last seen recently";
+ const diff=Math.max(0,Date.now()-date.getTime());
+ const minutes=Math.floor(diff/60000);
+ if(minutes<1)return "last seen just now";
+ if(minutes<60)return `last seen ${minutes} min ago`;
+ const hours=Math.floor(minutes/60);
+ if(hours<24)return `last seen ${hours} hr ago`;
+ const days=Math.floor(hours/24);
+ if(days===1)return "last seen yesterday";
+ return `last seen ${days} days ago`;
+}
+
+function listenForOtherPresence(){
+ if(presenceUnsubscribe)presenceUnsubscribe();
+ presenceUnsubscribe=onSnapshot(doc(db,"users",otherUid),snap=>{
+  if(!snap.exists())return;
+  const data=snap.data();
+  const isFresh=data.online===true&&data.lastSeen?.toDate&&Date.now()-data.lastSeen.toDate().getTime()<90000;
+  roomUsername.textContent=isFresh?"online":formatLastSeen(data.lastSeen);
+ });
+}
 
 async function markMessagesRead(){
  try{
@@ -61,7 +116,13 @@ input.addEventListener("input",setComposer);setComposer();
 onAuthStateChanged(auth,async user=>{
  if(!user){location.href="login.html";return}
  currentUser=user;
- try{const profile=await getDoc(doc(db,"users",user.uid));if(!profile.exists()){location.href="login.html";return}listenForMessages()}catch(e){console.error(e);showMessageError()}
+ try{
+  const profile=await getDoc(doc(db,"users",user.uid));
+  if(!profile.exists()){location.href="login.html";return}
+  startPresence();
+  listenForOtherPresence();
+  listenForMessages();
+ }catch(e){console.error(e);showMessageError()}
 });
 
 async function listenForMessages(){
@@ -347,6 +408,10 @@ audio.addEventListener("ended",()=>playVoiceIcon.innerHTML=escIconPlay);
 sendVoice.addEventListener("click",sendRecordedVoice);
 window.addEventListener("beforeunload",()=>{
  unsubscribe?.();
+ presenceUnsubscribe?.();
+ clearInterval(presenceHeartbeat);
+ document.removeEventListener("visibilitychange",handleVisibility);
+ window.removeEventListener("pagehide",handlePageHide);
  microphoneStream?.getTracks().forEach(t=>t.stop());
  microphoneStream=null;
 });
