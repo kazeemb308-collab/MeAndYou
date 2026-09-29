@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, collection, query, where, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 import { listenForForegroundMessages } from "./notifications.js";
 
 const firebaseConfig={
@@ -22,7 +22,34 @@ const results=document.getElementById("searchResults");
 const conversationList=document.getElementById("conversationList");
 
 let currentUser=null;
-let searchTimer=null;
+let presenceHeartbeat=null;
+
+async function updatePresence(online){
+  if(!currentUser)return;
+  try{
+    await setDoc(doc(db,"users",currentUser.uid),{
+      online,
+      lastSeen:serverTimestamp(),
+      updatedAt:serverTimestamp()
+    },{merge:true});
+  }catch(error){
+    console.warn("Presence update failed:",error);
+  }
+}
+
+function startPresence(){
+  updatePresence(true);
+  clearInterval(presenceHeartbeat);
+  presenceHeartbeat=setInterval(()=>{
+    if(document.visibilityState==="visible")updatePresence(true);
+  },25000);
+}
+
+function handlePresenceVisibility(){
+  updatePresence(document.visibilityState==="visible");
+}
+
+
 let unsubscribeSent=null;
 let unsubscribeReceived=null;
 let messageMap=new Map();
@@ -55,6 +82,9 @@ onAuthStateChanged(auth,async user=>{
   }
 
   currentUser=user;
+  startPresence();
+  document.addEventListener("visibilitychange",handlePresenceVisibility);
+  window.addEventListener("pagehide",()=>updatePresence(false));
 
   try{
     const profile=await getDoc(doc(db,"users",user.uid));
