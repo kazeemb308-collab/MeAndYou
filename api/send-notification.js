@@ -63,9 +63,11 @@ export default async function handler(req,res){
 
     const messages=tokens.map(token=>({
       token,
-      data:{
+      notification:{
         title:senderName,
-        body,
+        body
+      },
+      data:{
         messageId:String(messageSnap.id),
         senderId:String(decoded.uid),
         receiverId:String(receiverId),
@@ -75,6 +77,13 @@ export default async function handler(req,res){
       webpush:{
         fcmOptions:{
           link:new URL(chatUrl,"https://meandyou.vercel.app").href
+        },
+        notification:{
+          title:senderName,
+          body,
+          icon:"https://meandyou.vercel.app/favicon.png",
+          badge:"https://meandyou.vercel.app/favicon.png",
+          tag:"meandyou-"+messageSnap.id
         },
         headers:{
           TTL:"86400"
