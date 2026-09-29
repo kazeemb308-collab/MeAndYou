@@ -33,9 +33,18 @@ window.addEventListener("click",event=>{
   const target=event.target.closest("a,button");
   if(!target)return;
   const href=target.getAttribute("href");
-  if(href && href.endsWith(".html") && !href.startsWith("http")){
+  let destination=href;
+  if(!destination){
+    if(target.id==="profileButton" || target.id==="profileNavButton" || target.id==="profileNav") destination="profile.html";
+    else if(target.id==="chatsNavButton" || target.id==="chatsNav" || target.id==="backButton") destination="chat.html";
+    else if(target.id==="newChatButton" || target.id==="newChatNav") destination="chat.html#new-chat";
+    else if(target.classList.contains("conversation-item")){
+      destination="chat-room.html?uid="+encodeURIComponent(target.dataset.uid||"")+"&username="+encodeURIComponent(target.dataset.username||"")+"&name="+encodeURIComponent(target.dataset.name||"");
+    }
+  }
+  if(destination && destination.endsWith(".html") && !destination.startsWith("http")){
     event.preventDefault();
-    loadPage(href);
+    loadPage(destination);
   }
 },true);
 
