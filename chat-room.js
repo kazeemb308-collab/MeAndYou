@@ -33,7 +33,7 @@ roomUsername.textContent="@"+otherUsername;
 roomAvatar.textContent=otherName.charAt(0).toUpperCase();
 
 document.getElementById("backButton").addEventListener("click",()=>{
-  history.length>1 ? history.back() : location.href="chat.html";
+  location.href="chat.html";
 });
 
 if(!otherUid){
@@ -45,6 +45,7 @@ if(!otherUid){
 
 let currentUser=null;
 let unsubscribe=null;
+const renderedMessages=new Map();
 
 onAuthStateChanged(auth,async user=>{
   if(!user){
@@ -83,8 +84,6 @@ function listenForMessages(){
   );
 
   unsubscribe=onSnapshot(messagesQuery,snapshot=>{
-    messages.querySelectorAll(".message-row").forEach(el=>el.remove());
-
     if(snapshot.empty){
       emptyRoom.style.display="block";
       emptyRoom.querySelector("h2").textContent="Start your conversation";
@@ -94,19 +93,29 @@ function listenForMessages(){
 
     emptyRoom.style.display="none";
 
-    const messageList=snapshot.docs.map(messageDoc=>({
-      id:messageDoc.id,
-      ...messageDoc.data()
-    }));
+    const removedIds=new Set();
+    snapshot.docChanges().forEach(change=>{
+      if(change.type==="removed"){
+        removedIds.add(change.doc.id);
+        const row=renderedMessages.get(change.doc.id);
+        row?.remove();
+        renderedMessages.delete(change.doc.id);
+        return;
+      }
 
-    messageList.sort((a,b)=>{
-      const aTime=a.createdAt?.toMillis ? a.createdAt.toMillis() : Date.now();
-      const bTime=b.createdAt?.toMillis ? b.createdAt.toMillis() : Date.now();
-      return aTime-bTime;
+      const data={id:change.doc.id,...change.doc.data()};
+      const existing=renderedMessages.get(data.id);
+      if(existing){
+        updateMessageOnScreen(existing,data);
+      }else{
+        addMessageToScreen(data);
+      }
     });
 
-    messageList.forEach(data=>addMessageToScreen(data));
-    scrollToBottom();
+    sortRenderedMessages();
+    if(snapshot.docChanges().some(change=>change.type==="added" || change.type==="modified")){
+      scrollToBottom();
+    }
   },error=>{
     console.error("Message listener error:",error);
     showMessageError();
@@ -122,6 +131,7 @@ function showMessageError(){
 function addMessageToScreen(data){
   const row=document.createElement("div");
   row.className="message-row "+(data.senderId===currentUser.uid?"sent":"received");
+  row.dataset.messageTime=data.createdAt?.toMillis ? data.createdAt.toMillis() : Date.now();
 
   const bubble=document.createElement("div");
   bubble.className="message-bubble";
@@ -142,6 +152,33 @@ function addMessageToScreen(data){
   bubble.appendChild(time);
   row.appendChild(bubble);
   messages.appendChild(row);
+  renderedMessages.set(data.id,row);
+}
+
+function updateMessageOnScreen(row,data){
+  const bubble=row.querySelector(".message-bubble");
+  const time=row.querySelector(".message-time");
+  if(!bubble || !time) return;
+
+  bubble.firstChild.textContent=data.text || "";
+  if(data.createdAt?.toDate){
+    time.textContent=data.createdAt.toDate().toLocaleTimeString([],{
+      hour:"numeric",
+      minute:"2-digit"
+    });
+  }else{
+    time.textContent="Sending…";
+  }
+}
+
+function sortRenderedMessages(){
+  const rows=[...renderedMessages.entries()];
+  rows.sort(([,a],[,b])=>{
+    const aTime=a.dataset.messageTime ? Number(a.dataset.messageTime) : 0;
+    const bTime=b.dataset.messageTime ? Number(b.dataset.messageTime) : 0;
+    return aTime-bTime;
+  });
+  rows.forEach(([,row])=>messages.appendChild(row));
 }
 
 form.addEventListener("submit",async e=>{
