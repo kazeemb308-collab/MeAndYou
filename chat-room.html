@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#075e54">
+<title>Chat — MeAndYou</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body class="room-page">
+<header class="room-header">
+  <button id="backButton" class="room-back" type="button" aria-label="Back">‹</button>
+  <div class="room-avatar" id="roomAvatar">?</div>
+  <div class="room-person">
+    <strong id="roomName">Loading…</strong>
+    <span id="roomUsername">@username</span>
+  </div>
+</header>
+
+<main id="messages" class="messages">
+  <div id="emptyRoom" class="room-empty">
+    <div class="empty-icon">💬</div>
+    <h2>Start your conversation</h2>
+    <p>Send a message to begin.</p>
+  </div>
+</main>
+
+<form id="messageForm" class="message-bar">
+  <input id="messageInput" type="text" maxlength="2000" placeholder="Message" autocomplete="off">
+  <button id="sendButton" class="send-button" type="submit" aria-label="Send">➤</button>
+</form>
+
+<script type="module" src="chat-room.js"></script>
+</body>
+</html>
