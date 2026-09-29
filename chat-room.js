@@ -209,18 +209,47 @@ async function sendRecordedVoice(){
  }
 }
 
-voiceButton.addEventListener("pointerdown",e=>{
+let activePointerId=null;
+let pointerStartY=0;
+let lockedHandsFree=false;
+
+voiceButton.addEventListener("pointerdown",async e=>{
  e.preventDefault();
+ activePointerId=e.pointerId;
+ pointerStartY=e.clientY;
+ lockedHandsFree=false;
  voiceButton.setPointerCapture?.(e.pointerId);
- startRecording()
+ await startRecording()
 });
+
+voiceButton.addEventListener("pointermove",e=>{
+ if(e.pointerId!==activePointerId||!recorder||isLocked)return;
+ const movedUp=pointerStartY-e.clientY;
+ if(movedUp>=55){
+  isLocked=true;
+  lockedHandsFree=true;
+  recordingHint.textContent="Recording hands-free";
+  lockRecord.style.display="grid";
+ }
+});
+
 voiceButton.addEventListener("pointerup",e=>{
- if(!isLocked){e.preventDefault();stopRecording()}
+ if(e.pointerId!==activePointerId)return;
+ e.preventDefault();
+ activePointerId=null;
+ if(!isLocked)stopRecording();
 });
-voiceButton.addEventListener("pointercancel",()=>{if(!isLocked)stopRecording()});
+
+voiceButton.addEventListener("pointercancel",e=>{
+ if(e.pointerId!==activePointerId)return;
+ activePointerId=null;
+ if(!isLocked)stopRecording();
+});
+
 lockRecord.addEventListener("click",()=>{
  if(!recorder)return;
  isLocked=true;
+ lockedHandsFree=true;
  recordingHint.textContent="Finishing recording…";
  lockRecord.style.display="none";
  stopRecording()
