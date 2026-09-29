@@ -71,15 +71,24 @@ export default async function handler(req,res){
     let sent=0,failed=0;
     for(const item of subscriptions){
       try{
-        await webpush.sendNotification(item.subscription,JSON.stringify({
-          web_push:8030,
-          notification:{
-            title:senderName,
-            body,
-            navigate:chatUrl,
-            silent:false
+        await webpush.sendNotification(
+          item.subscription,
+          JSON.stringify({
+            notification:{
+              title:senderName,
+              body,
+              navigate:chatUrl,
+              messageId:String(messageId),
+              tag:"meandyou-"+String(messageId),
+              silent:false
+            }
+          }),
+          {
+            TTL:86400,
+            urgency:"high",
+            topic:"m"+String(messageId).replace(/[^a-zA-Z0-9_-]/g,"").slice(0,31)
           }
-        }),{TTL:86400});
+        );
         sent++;
       }catch(error){
         failed++;
