@@ -53,9 +53,12 @@ function showMessageError(){
 function makeAudioPlayer(src){
  const player=document.createElement("audio");
  player.controls=true;
- player.preload="metadata";
- player.src=src||"";
+ player.preload="auto";
  player.className="voice-message";
+ player.src=src||"";
+ // Start loading immediately so the first tap can play the note.
+ player.load();
+ player.addEventListener("error",()=>console.error("Voice playback error:",player.error));
  return player
 }
 
