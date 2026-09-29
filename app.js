@@ -1,5 +1,1 @@
-const startButton = document.getElementById('startBtn');
-
-startButton.addEventListener('click', () => {
-  alert('MeAndYou foundation is ready. Authentication comes next.');
-});
+// MeAndYou uses page navigation for the authentication flow.
