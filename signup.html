@@ -1,31 +1,31 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-  <meta name="theme-color" content="#075e54">
-  <title>Create account — MeAndYou</title>
-  <link rel="stylesheet" href="app.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#075e54">
+<title>Create account — MeAndYou</title>
+<link rel="stylesheet" href="app.css">
 </head>
 <body>
-  <main class="auth-page">
-    <section class="auth-card">
-      <div class="logo small">M</div>
-      <h1>Create your account</h1>
-      <p>Join MeAndYou and start messaging.</p>
-      <form id="authForm" novalidate>
-        <label for="name">Name</label>
-        <input id="name" type="text" autocomplete="name" placeholder="Your name" required>
-        <label for="email">Email</label>
-        <input id="email" type="email" autocomplete="email" placeholder="you@example.com" required>
-        <label for="password">Password</label>
-        <input id="password" type="password" autocomplete="new-password" placeholder="At least 6 characters" minlength="6" required>
-        <button class="primary" type="submit">Create account</button>
-      </form>
-      <p id="authMessage" class="message" role="status"></p>
-      <div class="switch-auth">Already have an account? <a href="login.html">Log in</a></div>
-    </section>
-  </main>
-  <script type="module" src="auth.js"></script>
+<main class="auth-page">
+<section class="auth-card">
+<div class="logo small">M</div>
+<h1>Create your account</h1>
+<p>Choose a username people can use to find you.</p>
+<form id="authForm" novalidate>
+<label for="username">Username</label>
+<input id="username" name="username" type="text" autocomplete="username" placeholder="@username" minlength="3" maxlength="20" required>
+<label for="email">Email</label>
+<input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required>
+<label for="password">Password</label>
+<input id="password" name="password" type="password" autocomplete="new-password" placeholder="At least 6 characters" minlength="6" required>
+<button class="primary" type="submit">Create account</button>
+</form>
+<p id="authMessage" class="message" role="status"></p>
+<div class="switch-auth">Already have an account? <a href="login.html">Log in</a></div>
+</section>
+</main>
+<script type="module" src="auth.js"></script>
 </body>
 </html>
