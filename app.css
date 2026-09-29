@@ -24,3 +24,5 @@ input,textarea,[contenteditable="true"]{
   user-select:text;
   -webkit-touch-callout:default;
 }
+
+.notification-action{color:#075e54;border-color:#cfe2df;display:flex;align-items:center;justify-content:center;gap:8px}.notification-action:disabled{opacity:.65}.notification-action span:first-child{font-size:18px}
