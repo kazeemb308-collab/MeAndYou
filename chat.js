@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
+import { listenForForegroundMessages } from "./notifications.js";
 
 const firebaseConfig={
   apiKey:"AIzaSyBzuctjdTAHT3kxdrIZz9aGe5mGLsiGwx4",
@@ -67,6 +68,14 @@ onAuthStateChanged(auth,async user=>{
 
   listenForConversations();
   notificationReady=true;
+  listenForForegroundMessages(payload=>{
+    const data=payload.data||{};
+    const title=data.title||payload.notification?.title||"New message";
+    const body=data.body||payload.notification?.body||"New message";
+    if("Notification" in window && Notification.permission==="granted"){
+      try{new Notification(title,{body,icon:"/favicon.png",tag:data.tag||"meandyou-foreground"});}catch(error){console.error("Foreground notification error:",error)}
+    }
+  }).catch(error=>console.error("FCM foreground listener error:",error));
 });
 
 function listenForConversations(){
