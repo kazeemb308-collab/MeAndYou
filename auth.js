@@ -1,77 +1,120 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
 import {
   getAuth,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  GoogleAuthProvider,
-  signInWithPopup,
-  updateProfile
+  RecaptchaVerifier,
+  signInWithPhoneNumber
 } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
 
-// Replace these values with your Firebase Web App configuration.
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT.firebasestorage.app",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyBzuctjdTAHT3kxdrIZz9aGe5mGLsiGwx4",
+  authDomain: "m3ss3nger-50a21.firebaseapp.com",
+  projectId: "m3ss3nger-50a21",
+  storageBucket: "m3ss3nger-50a21.firebasestorage.app",
+  messagingSenderId: "245814154474",
+  appId: "1:245814154474:web:4592f3a7e272154396f393"
 };
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const googleProvider = new GoogleAuthProvider();
 
-const form = document.querySelector("form");
-const googleButton = document.getElementById("googleBtn");
+const form = document.getElementById("phoneForm");
+const phoneInput = document.getElementById("phone");
+const countryCode = document.getElementById("countryCode");
 const message = document.getElementById("authMessage");
+const sendButton = document.getElementById("sendCodeBtn");
 
-function showMessage(text) {
-  if (message) message.textContent = text;
+let confirmationResult = null;
+let recaptchaVerifier = null;
+
+function showMessage(text, type = "") {
+  message.textContent = text;
+  message.className = `message ${type}`.trim();
 }
 
-function friendlyError(error) {
-  const code = error?.code || "";
-  const messages = {
-    "auth/invalid-email": "Please enter a valid email address.",
-    "auth/missing-password": "Please enter your password.",
-    "auth/invalid-credential": "The email or password is incorrect.",
-    "auth/email-already-in-use": "An account already exists with this email.",
-    "auth/weak-password": "Password must be at least 6 characters.",
-    "auth/popup-closed-by-user": "Google sign-in was cancelled."
-  };
-  return messages[code] || error?.message || "Something went wrong. Please try again.";
+function getPhoneNumber() {
+  const raw = phoneInput.value.replace(/\D/g, "");
+  if (!raw) return null;
+  return `${countryCode.value}${raw.replace(/^0+/, "")}`;
 }
 
-form?.addEventListener("submit", async (event) => {
+function setupRecaptcha() {
+  if (recaptchaVerifier) return recaptchaVerifier;
+
+  recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", {
+    size: "normal",
+    callback: () => showMessage("Verification complete. Tap Send code again if needed.")
+  });
+
+  return recaptchaVerifier;
+}
+
+form.addEventListener("submit", async (event) => {
   event.preventDefault();
-  showMessage("Working…");
 
-  const email = document.getElementById("email")?.value.trim();
-  const password = document.getElementById("password")?.value;
-  const name = document.getElementById("name")?.value.trim();
+  const phoneNumber = getPhoneNumber();
+  if (!phoneNumber || phoneNumber.length < 10) {
+    showMessage("Enter a valid phone number.", "error");
+    return;
+  }
+
+  sendButton.disabled = true;
+  showMessage("Preparing verification…");
 
   try {
-    if (name !== undefined) {
-      if (!name) throw new Error("Please enter your name.");
-      const result = await createUserWithEmailAndPassword(auth, email, password);
-      await updateProfile(result.user, { displayName: name });
-      window.location.href = "chat.html";
-    } else {
-      await signInWithEmailAndPassword(auth, email, password);
-      window.location.href = "chat.html";
-    }
+    const verifier = setupRecaptcha();
+    confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, verifier);
+
+    sessionStorage.setItem("pendingPhone", phoneNumber);
+    document.body.classList.add("show-code");
+    document.getElementById("codeInput").focus();
+    showMessage(`A verification code was sent to ${phoneNumber}.`, "success");
   } catch (error) {
-    showMessage(friendlyError(error));
+    console.error(error);
+    showMessage(error?.message || "Could not send the verification code.", "error");
+    if (recaptchaVerifier) {
+      try {
+        recaptchaVerifier.clear();
+      } catch {}
+      recaptchaVerifier = null;
+      document.getElementById("recaptcha-container").innerHTML = "";
+    }
+  } finally {
+    sendButton.disabled = false;
   }
 });
 
-googleButton?.addEventListener("click", async () => {
-  showMessage("Opening Google sign-in…");
+document.getElementById("verifyForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  if (!confirmationResult) {
+    showMessage("Request a verification code first.", "error");
+    return;
+  }
+
+  const code = document.getElementById("codeInput").value.trim();
+  if (!/^\d{6}$/.test(code)) {
+    showMessage("Enter the 6-digit verification code.", "error");
+    return;
+  }
+
+  const verifyButton = document.getElementById("verifyBtn");
+  verifyButton.disabled = true;
+  showMessage("Verifying…");
+
   try {
-    await signInWithPopup(auth, googleProvider);
+    await confirmationResult.confirm(code);
     window.location.href = "chat.html";
   } catch (error) {
-    showMessage(friendlyError(error));
+    console.error(error);
+    showMessage("That code is incorrect or has expired. Try again.", "error");
+  } finally {
+    verifyButton.disabled = false;
   }
+});
+
+document.getElementById("changeNumberBtn").addEventListener("click", () => {
+  document.body.classList.remove("show-code");
+  document.getElementById("codeInput").value = "";
+  confirmationResult = null;
+  showMessage("");
 });
