@@ -27,6 +27,10 @@
     <p id="profileHandle">@username</p>
   </div>
 
+  <button class="profile-action notification-action" id="notificationButton" type="button">
+    <span id="notificationIcon" aria-hidden="true">🔔</span>
+    <span id="notificationText">Enable notifications</span>
+  </button>
   <button class="profile-action" id="logoutButton" type="button">Log out</button>
 </main>
 
@@ -68,6 +72,44 @@ const nameEl=document.getElementById("profileName");
 const usernameEl=document.getElementById("profileUsername");
 const handleEl=document.getElementById("profileHandle");
 const avatarEl=document.getElementById("profileAvatar");
+const notificationButton=document.getElementById("notificationButton");
+const notificationText=document.getElementById("notificationText");
+
+function updateNotificationButton(){
+  if(!("Notification" in window)){
+    notificationText.textContent="Notifications unavailable";
+    notificationButton.disabled=true;
+    return;
+  }
+  if(Notification.permission==="granted"){
+    notificationText.textContent="Notifications enabled";
+    notificationButton.disabled=true;
+  }else if(Notification.permission==="denied"){
+    notificationText.textContent="Notifications blocked in browser settings";
+    notificationButton.disabled=true;
+  }else{
+    notificationText.textContent="Enable notifications";
+    notificationButton.disabled=false;
+  }
+}
+
+notificationButton.addEventListener("click",async()=>{
+  if(!("Notification" in window))return;
+  try{
+    const permission=await Notification.requestPermission();
+    updateNotificationButton();
+    if(permission==="granted"){
+      new Notification("MeAndYou",{
+        body:"Notifications are now enabled.",
+        icon:"/favicon.png"
+      });
+    }
+  }catch(error){
+    console.error("Notification permission error:",error);
+  }
+});
+
+updateNotificationButton();
 
 onAuthStateChanged(auth,async user=>{
   if(!user){
