@@ -87,7 +87,6 @@ export default async function handler(req,res){
           {
             TTL:86400,
             urgency:"high",
-            topic:"m"+String(messageId).replace(/[^a-zA-Z0-9_-]/g,"").slice(0,31)
           }
         );
         sent++;
