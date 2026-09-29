@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
-import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
 const firebaseConfig={
   apiKey:"AIzaSyBzuctjdTAHT3kxdrIZz9aGe5mGLsiGwx4",
@@ -18,8 +18,13 @@ const db=getFirestore(app);
 const nameEl=document.getElementById("currentUserName");
 const searchInput=document.getElementById("searchInput");
 const results=document.getElementById("searchResults");
+const conversationList=document.getElementById("conversationList");
+
 let currentUser=null;
 let searchTimer=null;
+let unsubscribeSent=null;
+let unsubscribeReceived=null;
+let messageMap=new Map();
 
 onAuthStateChanged(auth,async user=>{
   if(!user){
@@ -41,7 +46,163 @@ onAuthStateChanged(auth,async user=>{
     console.error(e);
     nameEl.textContent=user.displayName || "Welcome";
   }
+
+  listenForConversations();
 });
+
+function listenForConversations(){
+  const sentQuery=query(
+    collection(db,"messages"),
+    where("senderId","==",currentUser.uid)
+  );
+
+  const receivedQuery=query(
+    collection(db,"messages"),
+    where("receiverId","==",currentUser.uid)
+  );
+
+  const handleSnapshot=snapshot=>{
+    snapshot.docChanges().forEach(change=>{
+      if(change.type==="removed"){
+        messageMap.delete(change.doc.id);
+      }else{
+        messageMap.set(change.doc.id,{
+          id:change.doc.id,
+          ...change.doc.data()
+        });
+      }
+    });
+
+    renderConversations();
+  };
+
+  unsubscribeSent=onSnapshot(sentQuery,handleSnapshot,error=>{
+    console.error("Sent messages listener:",error);
+  });
+
+  unsubscribeReceived=onSnapshot(receivedQuery,handleSnapshot,error=>{
+    console.error("Received messages listener:",error);
+  });
+}
+
+async function renderConversations(){
+  if(!currentUser) return;
+
+  const latestByUser=new Map();
+
+  for(const message of messageMap.values()){
+    const otherUid=message.senderId===currentUser.uid
+      ? message.receiverId
+      : message.senderId;
+
+    if(!otherUid || otherUid===currentUser.uid) continue;
+
+    const old=latestByUser.get(otherUid);
+    const messageTime=message.createdAt?.toMillis ? message.createdAt.toMillis() : 0;
+    const oldTime=old?.createdAt?.toMillis ? old.createdAt.toMillis() : 0;
+
+    if(!old || messageTime>=oldTime){
+      latestByUser.set(otherUid,message);
+    }
+  }
+
+  if(latestByUser.size===0){
+    conversationList.innerHTML=`
+      <div class="empty-state">
+        <div class="empty-icon">💬</div>
+        <h2>No conversations yet</h2>
+        <p>Search for a username above to start a new chat.</p>
+      </div>
+    `;
+    return;
+  }
+
+  conversationList.innerHTML=`
+    <div class="conversation-loading">Loading conversations…</div>
+  `;
+
+  const conversations=[];
+
+  for(const [uid,message] of latestByUser){
+    try{
+      const profileDoc=await getDoc(doc(db,"users",uid));
+      if(profileDoc.exists()){
+        conversations.push({
+          uid,
+          profile:profileDoc.data(),
+          message
+        });
+      }
+    }catch(error){
+      console.error("Profile load error:",error);
+    }
+  }
+
+  conversations.sort((a,b)=>{
+    const aTime=a.message.createdAt?.toMillis ? a.message.createdAt.toMillis() : 0;
+    const bTime=b.message.createdAt?.toMillis ? b.message.createdAt.toMillis() : 0;
+    return bTime-aTime;
+  });
+
+  conversationList.innerHTML=conversations.map(item=>{
+    const profile=item.profile;
+    const message=item.message;
+    const name=profile.name || "Unnamed user";
+    const username=profile.username || "";
+    const initial=name.charAt(0).toUpperCase();
+    const text=message.text || "";
+    const prefix=message.senderId===currentUser.uid ? "You: " : "";
+    const time=formatConversationTime(message.createdAt);
+
+    return `
+      <button class="conversation-item" type="button"
+        data-uid="${escapeHtml(item.uid)}"
+        data-username="${escapeHtml(username)}"
+        data-name="${escapeHtml(name)}">
+        <div class="conversation-avatar">${escapeHtml(initial)}</div>
+        <div class="conversation-info">
+          <div class="conversation-top">
+            <strong>${escapeHtml(name)}</strong>
+            <time>${escapeHtml(time)}</time>
+          </div>
+          <div class="conversation-bottom">
+            <span>@${escapeHtml(username)}</span>
+            <p>${escapeHtml(prefix+text)}</p>
+          </div>
+        </div>
+      </button>
+    `;
+  }).join("");
+
+  conversationList.querySelectorAll(".conversation-item").forEach(button=>{
+    button.addEventListener("click",()=>{
+      const params=new URLSearchParams({
+        uid:button.dataset.uid,
+        username:button.dataset.username,
+        name:button.dataset.name
+      });
+      window.location.href=`chat-room.html?${params.toString()}`;
+    });
+  });
+}
+
+function formatConversationTime(timestamp){
+  if(!timestamp?.toDate) return "";
+  const date=timestamp.toDate();
+  const now=new Date();
+
+  if(date.toDateString()===now.toDateString()){
+    return date.toLocaleTimeString([],{
+      hour:"numeric",
+      minute:"2-digit"
+    });
+  }
+
+  return date.toLocaleDateString([],{
+    day:"numeric",
+    month:"short"
+  });
+}
 
 searchInput?.addEventListener("input",()=>{
   clearTimeout(searchTimer);
@@ -171,4 +332,9 @@ document.getElementById("profileButton")?.addEventListener("click",()=>{
 
 document.getElementById("profileNavButton")?.addEventListener("click",()=>{
   alert("Profile settings will be added next.");
+});
+
+window.addEventListener("beforeunload",()=>{
+  unsubscribeSent?.();
+  unsubscribeReceived?.();
 });
