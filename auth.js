@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, updateProfile } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, updateProfile, setPersistence, browserLocalPersistence, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
 import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -17,6 +17,16 @@ const db = getFirestore(app);
 
 const form = document.getElementById("authForm");
 const message = document.getElementById("authMessage");
+
+setPersistence(auth, browserLocalPersistence).catch(error=>{
+  console.error("Could not enable persistent login:",error);
+});
+
+onAuthStateChanged(auth,user=>{
+  if(user){
+    window.location.replace("chat.html");
+  }
+});
 
 function show(text, type = "") {
   if (!message) return;
