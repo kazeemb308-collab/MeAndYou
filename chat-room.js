@@ -12,7 +12,7 @@ roomName.textContent=otherName;roomUsername.textContent="@"+otherUsername;roomAv
 document.getElementById("backButton").addEventListener("click",()=>location.href="chat.html");
 if(!otherUid){form.style.display="none";throw new Error("Missing recipient uid");}
 
-let currentUser=null,unsubscribe=null,recorder=null,recordedChunks=[],recordingStarted=0,recordingTimer=null,isLocked=false,audioBlob=null,audioUrl=null,audio=new Audio(),recordingMime="";
+let currentUser=null,unsubscribe=null,recorder=null,microphoneStream=null,recordedChunks=[],recordingStarted=0,recordingTimer=null,isLocked=false,audioBlob=null,audioUrl=null,audio=new Audio(),recordingMime="";
 const renderedMessages=new Map();
 const makeConversationId=(a,b)=>[a,b].sort().join("_");
 const formatTime=s=>{s=Math.max(0,Math.floor(s));return Math.floor(s/60)+":"+String(s%60).padStart(2,"0")};
@@ -116,7 +116,10 @@ async function startRecording(){
  if(recorder||audioBlob)return;
  if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder){alert("Voice recording is not supported by this browser.");return}
  try{
-  const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+  if(!microphoneStream){
+   microphoneStream=await navigator.mediaDevices.getUserMedia({audio:true});
+  }
+  const stream=microphoneStream;
   recordingMime=supportedMime();
   recorder=new MediaRecorder(stream,recordingMime?{mimeType:recordingMime}:undefined);
   recordedChunks=[];
@@ -127,7 +130,6 @@ async function startRecording(){
   recordingHint.textContent="Slide up to lock";
   recorder.ondataavailable=e=>{if(e.data.size)recordedChunks.push(e.data)};
   recorder.onstop=()=>{
-   stream.getTracks().forEach(t=>t.stop());
    clearInterval(recordingTimer);
    if(!recordedChunks.length){resetRecording();return}
    audioBlob=new Blob(recordedChunks,{type:recordingMime||"audio/webm"});
@@ -237,4 +239,8 @@ playVoice.addEventListener("click",()=>{
 });
 audio.addEventListener("ended",()=>playVoiceIcon.innerHTML=escIconPlay);
 sendVoice.addEventListener("click",sendRecordedVoice);
-window.addEventListener("beforeunload",()=>unsubscribe?.());
+window.addEventListener("beforeunload",()=>{
+ unsubscribe?.();
+ microphoneStream?.getTracks().forEach(t=>t.stop());
+ microphoneStream=null;
+});
