@@ -63,7 +63,15 @@ export default async function handler(req,res){
       process.env.VAPID_PRIVATE_KEY
     );
 
-    const body=message.type==="voice"?"🎙️ New voice note":String(message.text||"New message").slice(0,180);
+    const unreadSnap=await db.collection("messages")
+      .where("receiverId","==",receiverId)
+      .where("senderId","==",decoded.uid)
+      .where("readAt","==",false)
+      .get();
+    const unreadCount=unreadSnap.size;
+    const body=unreadCount>1
+      ? `You have ${unreadCount} new messages`
+      : (message.type==="voice"?"🎙️ New voice note":String(message.text||"New message").slice(0,180));
     const chatUrl="https://meandyou.vercel.app/chat-room.html?uid="+encodeURIComponent(decoded.uid)+
       "&username="+encodeURIComponent(sender.username||"")+
       "&name="+encodeURIComponent(senderName);
@@ -79,6 +87,7 @@ export default async function handler(req,res){
               title:senderName,
               body,
               navigate:chatUrl,
+              app_badge:unreadCount,
               messageId:String(messageId),
               tag:"meandyou-"+String(messageId),
               silent:false
