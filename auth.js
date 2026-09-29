@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
-import { initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, updateProfile, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
+import { getAuth, browserLocalPersistence, setPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, updateProfile, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
 import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -12,7 +12,8 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const auth = initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence] });
+const auth = getAuth(app);
+const persistenceReady = setPersistence(auth, browserLocalPersistence);
 const db = getFirestore(app);
 
 const form = document.getElementById("authForm");
@@ -50,6 +51,7 @@ function friendlyError(e) {
 
 form?.addEventListener("submit", async (e) => {
   e.preventDefault();
+  await persistenceReady;
   show("Creating account…");
 
   try {
