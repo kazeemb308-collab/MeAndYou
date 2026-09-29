@@ -1,6 +1,6 @@
 import { getApps, initializeApp, cert } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
-import { getFirestore, FieldPath } from "firebase-admin/firestore";
+import { getFirestore } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
 
 let adminApp;
@@ -57,21 +57,35 @@ export default async function handler(req,res){
     const body=message.type==="voice"?"🎙️ New voice note":String(message.text||"New message").slice(0,180);
     const messaging=getMessaging(app);
 
+    const chatUrl="/chat-room.html?uid="+encodeURIComponent(decoded.uid)+
+      "&username="+encodeURIComponent(sender.username||"")+
+      "&name="+encodeURIComponent(senderName);
+
     const messages=tokens.map(token=>({
       token,
+      notification:{
+        title:senderName,
+        body
+      },
       data:{
         title:senderName,
         body,
-        url:"chat-room.html?uid="+encodeURIComponent(decoded.uid)+
-          "&username="+encodeURIComponent(sender.username||"")+
-          "&name="+encodeURIComponent(senderName),
+        messageId:String(messageSnap.id),
+        senderId:String(decoded.uid),
+        receiverId:String(receiverId),
+        url:chatUrl,
         tag:"meandyou-"+messageSnap.id
       },
       webpush:{
+        notification:{
+          title:senderName,
+          body,
+          icon:"/favicon.png",
+          badge:"/favicon.png",
+          tag:"meandyou-"+messageSnap.id
+        },
         fcmOptions:{
-          link:"/chat-room.html?uid="+encodeURIComponent(decoded.uid)+
-            "&username="+encodeURIComponent(sender.username||"")+
-            "&name="+encodeURIComponent(senderName)
+          link:new URL(chatUrl,"https://meandyou.vercel.app").href
         }
       }
     }));
