@@ -15,6 +15,20 @@ if(!otherUid){form.style.display="none";throw new Error("Missing recipient uid")
 let currentUser=null,unsubscribe=null,recorder=null,microphoneStream=null,recordedChunks=[],recordingStarted=0,recordingTimer=null,isLocked=false,audioBlob=null,audioUrl=null,audio=new Audio(),recordingMime="",recordingStarting=false,abortRecording=false,pointerHeld=false;
 const renderedMessages=new Map();
 const makeConversationId=(a,b)=>[a,b].sort().join("_");
+
+async function sendPushNotification(messageId){
+ try{
+  const idToken=await currentUser.getIdToken();
+  const response=await fetch("/api/send-notification",{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({idToken,messageId})
+  });
+  if(!response.ok)console.error("Push notification request failed:",await response.text());
+ }catch(error){
+  console.error("Push notification request error:",error);
+ }
+}
 const formatTime=s=>{s=Math.max(0,Math.floor(s));return Math.floor(s/60)+":"+String(s%60).padStart(2,"0")};
 const escIconPlay='<path d="m8 5 11 7-11 7V5Z"/>';
 const escIconPause='<path d="M8 5v14M16 5v14"/>';
@@ -105,7 +119,8 @@ form.addEventListener("submit",async e=>{
  if(!text||!currentUser)return;
  sendButton.disabled=true;
  try{
-  await addDoc(collection(db,"messages"),{conversationId:makeConversationId(currentUser.uid,otherUid),senderId:currentUser.uid,receiverId:otherUid,text,type:"text",createdAt:serverTimestamp()});
+  const messageRef=await addDoc(collection(db,"messages"),{conversationId:makeConversationId(currentUser.uid,otherUid),senderId:currentUser.uid,receiverId:otherUid,text,type:"text",createdAt:serverTimestamp()});
+  await sendPushNotification(messageRef.id);
   input.value="";setComposer();input.focus()
  }catch(e){console.error(e);alert("Message could not be sent. Check your Firestore rules.")}
  finally{sendButton.disabled=false}
@@ -218,7 +233,7 @@ async function sendRecordedVoice(){
    return
   }
   const audioData=await blobToDataUrl(audioBlob);
-  await addDoc(collection(db,"messages"),{
+  const messageRef=await addDoc(collection(db,"messages"),{
    conversationId:makeConversationId(currentUser.uid,otherUid),
    senderId:currentUser.uid,
    receiverId:otherUid,
@@ -227,6 +242,7 @@ async function sendRecordedVoice(){
    duration:Math.round((Date.now()-recordingStarted)/1000),
    createdAt:serverTimestamp()
   });
+  await sendPushNotification(messageRef.id);
   resetRecording()
  }catch(e){
   console.error(e);
