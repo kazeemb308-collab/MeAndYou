@@ -27,6 +27,7 @@ let unsubscribeSent=null;
 let unsubscribeReceived=null;
 let messageMap=new Map();
 let notificationReady=false;
+let conversationsReady=false;
 const notifiedMessageIds=new Set();
 
 function notifyIncomingMessage(message){
@@ -91,7 +92,7 @@ function listenForConversations(){
 
   const handleSnapshot=snapshot=>{
     snapshot.docChanges().forEach(change=>{
-      if(change.type==="added" && !change.doc.metadata.hasPendingWrites){
+      if(change.type==="added" && conversationsReady && !change.doc.metadata.hasPendingWrites){
         notifyIncomingMessage({id:change.doc.id,...change.doc.data()});
       }
       if(change.type==="removed"){
@@ -105,6 +106,12 @@ function listenForConversations(){
     });
 
     renderConversations();
+
+    // Firestore sends every existing message as "added" on the first snapshot.
+    // Mark the initial history as seen so old messages never become notifications on login.
+    if(!conversationsReady && !snapshot.metadata.hasPendingWrites){
+      conversationsReady=true;
+    }
   };
 
   unsubscribeSent=onSnapshot(sentQuery,handleSnapshot,error=>{
