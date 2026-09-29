@@ -1,7 +1,7 @@
 import { getApps, initializeApp, cert } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
-import { getMessaging } from "firebase-admin/messaging";
+import webpush from "web-push";
 
 let adminApp;
 
@@ -21,9 +21,7 @@ function getAdminApp(){
   return adminApp;
 }
 
-function json(res,status,body){
-  res.status(status).json(body);
-}
+function json(res,status,body){res.status(status).json(body)}
 
 export default async function handler(req,res){
   if(req.method!=="POST")return json(res,405,{error:"Method not allowed"});
@@ -38,7 +36,6 @@ export default async function handler(req,res){
     const messageSnap=await db.collection("messages").doc(String(messageId)).get();
 
     if(!messageSnap.exists)return json(res,404,{error:"Message not found."});
-
     const message=messageSnap.data();
     if(message.senderId!==decoded.uid)return json(res,403,{error:"Not allowed."});
 
@@ -49,69 +46,52 @@ export default async function handler(req,res){
     const sender=senderSnap.exists?senderSnap.data():{};
     const senderName=sender.name||decoded.name||"New message";
 
-    const tokensSnap=await db.collection("users").doc(receiverId).collection("notificationTokens").get();
-    const tokens=tokensSnap.docs.map(doc=>doc.data().token).filter(Boolean);
+    const subscriptionsSnap=await db.collection("users").doc(receiverId).collection("pushSubscriptions").get();
+    const subscriptions=subscriptionsSnap.docs
+      .map(d=>({doc:d,subscription:d.data().subscription}))
+      .filter(x=>x.subscription?.endpoint&&x.subscription?.keys);
 
-    if(!tokens.length)return json(res,200,{sent:0});
+    if(!subscriptions.length)return json(res,200,{sent:0,failed:0});
+
+    if(!process.env.VAPID_PRIVATE_KEY){
+      return json(res,500,{error:"VAPID_PRIVATE_KEY is not configured."});
+    }
+
+    webpush.setVapidDetails(
+      process.env.VAPID_SUBJECT||"mailto:admin@meandyou.app",
+      "BJv9WNXXxTchu-645ZD8Ung8YaUiTOGp2260AaPfzqMxuBdufSXVbzBS-BdY6ams-th2GAAcAG0PzF0D3k6pHtg",
+      process.env.VAPID_PRIVATE_KEY
+    );
 
     const body=message.type==="voice"?"🎙️ New voice note":String(message.text||"New message").slice(0,180);
-    const messaging=getMessaging(app);
-
-    const chatUrl="/chat-room.html?uid="+encodeURIComponent(decoded.uid)+
+    const chatUrl="https://meandyou.vercel.app/chat-room.html?uid="+encodeURIComponent(decoded.uid)+
       "&username="+encodeURIComponent(sender.username||"")+
       "&name="+encodeURIComponent(senderName);
 
-    const messages=tokens.map(token=>({
-      token,
-      notification:{
-        title:senderName,
-        body
-      },
-      data:{
-        messageId:String(messageSnap.id),
-        senderId:String(decoded.uid),
-        receiverId:String(receiverId),
-        url:chatUrl,
-        tag:"meandyou-"+messageSnap.id
-      },
-      webpush:{
-        fcmOptions:{
-          link:new URL(chatUrl,"https://meandyou.vercel.app").href
-        },
-        notification:{
-          title:senderName,
-          body,
-          icon:"https://meandyou.vercel.app/favicon.png",
-          badge:"https://meandyou.vercel.app/favicon.png",
-          tag:"meandyou-"+messageSnap.id
-        },
-        headers:{
-          TTL:"86400"
-        }
+    let sent=0,failed=0;
+    for(const item of subscriptions){
+      try{
+        await webpush.sendNotification(item.subscription,JSON.stringify({
+          web_push:8030,
+          notification:{
+            title:senderName,
+            body,
+            navigate:chatUrl,
+            silent:false
+          }
+        }),{TTL:86400});
+        sent++;
+      }catch(error){
+        failed++;
+        const status=error.statusCode||0;
+        if(status===404||status===410)await item.doc.ref.delete();
+        console.error("Web Push delivery error:",status,error.body||error.message);
       }
-    }));
-
-    const result=await messaging.sendEach(messages);
-
-    const invalid=[];
-    result.responses.forEach((response,index)=>{
-      const code=response.error?.code||"";
-      if(code.includes("registration-token-not-registered")||code.includes("invalid-registration-token")){
-        invalid.push(tokens[index]);
-      }
-    });
-
-    for(const token of invalid){
-      const docs=tokensSnap.docs.filter(d=>d.data().token===token);
-      for(const d of docs)await d.ref.delete();
     }
 
-    return json(res,200,{
-      sent:result.successCount,
-      failed:result.failureCount
-    });
+    return json(res,200,{sent,failed});
   }catch(error){
-    console.error("FCM notification error:",error);
+    console.error("Web Push notification error:",error);
     return json(res,500,{error:"Notification service failed."});
   }
 }
