@@ -54,6 +54,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
 import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
+import { enableNotifications } from "./notifications.js";
 
 const firebaseConfig={
   apiKey:"AIzaSyBzuctjdTAHT3kxdrIZz9aGe5mGLsiGwx4",
@@ -83,10 +84,10 @@ function updateNotificationButton(){
   }
   if(Notification.permission==="granted"){
     notificationText.textContent="Notifications enabled";
-    notificationButton.disabled=true;
+    notificationButton.disabled=false;
   }else if(Notification.permission==="denied"){
     notificationText.textContent="Notifications blocked in browser settings";
-    notificationButton.disabled=true;
+    notificationButton.disabled=false;
   }else{
     notificationText.textContent="Enable notifications";
     notificationButton.disabled=false;
@@ -94,18 +95,20 @@ function updateNotificationButton(){
 }
 
 notificationButton.addEventListener("click",async()=>{
-  if(!("Notification" in window))return;
+  notificationButton.disabled=true;
+  notificationText.textContent="Enabling…";
   try{
-    const permission=await Notification.requestPermission();
-    updateNotificationButton();
-    if(permission==="granted"){
-      new Notification("MeAndYou",{
-        body:"Notifications are now enabled.",
-        icon:"/favicon.png"
-      });
+    const result=await enableNotifications();
+    if(result.permission==="granted"){
+      notificationText.textContent="Notifications enabled";
+    }else{
+      notificationText.textContent="Notifications not enabled";
     }
   }catch(error){
-    console.error("Notification permission error:",error);
+    console.error("FCM setup error:",error);
+    notificationText.textContent=error.message||"Could not enable notifications";
+  }finally{
+    notificationButton.disabled=false;
   }
 });
 
