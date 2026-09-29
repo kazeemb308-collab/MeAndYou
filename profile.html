@@ -80,6 +80,8 @@ const handleEl=document.getElementById("profileHandle");
 const avatarEl=document.getElementById("profileAvatar");
 const notificationButton=document.getElementById("notificationButton");
 const notificationText=document.getElementById("notificationText");
+let profileUser=null;
+notificationButton.disabled=true;
 
 function updateNotificationButton(){
   if(!("Notification" in window)){
@@ -100,6 +102,10 @@ function updateNotificationButton(){
 }
 
 notificationButton.addEventListener("click",async()=>{
+  if(!profileUser){
+    notificationText.textContent="Please wait for your account to load";
+    return;
+  }
   notificationButton.disabled=true;
   notificationText.textContent="Enabling…";
   try{
@@ -126,6 +132,8 @@ onAuthStateChanged(auth,async user=>{
   }
 
   try{
+    profileUser=user;
+    updateNotificationButton();
     const profile=await getDoc(doc(db,"users",user.uid));
     const data=profile.exists()?profile.data():{};
     const name=data.name || user.displayName || "User";
