@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#075e54">
+<title>Profile - MeAndYou</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body class="chat-page">
+
+<header class="chat-header">
+  <div class="chat-brand">
+    <button class="profile-back" id="backButton" type="button" aria-label="Back">‹</button>
+    <div class="logo tiny">M</div>
+    <div>
+      <strong>Profile</strong>
+      <span id="profileUsername">Loading…</span>
+    </div>
+  </div>
+</header>
+
+<main class="profile-page">
+  <div class="profile-card">
+    <div class="profile-avatar" id="profileAvatar">M</div>
+    <h1 id="profileName">Loading…</h1>
+    <p id="profileHandle">@username</p>
+  </div>
+
+  <button class="profile-action" id="logoutButton" type="button">Log out</button>
+</main>
+
+<nav class="bottom-nav">
+  <button class="nav-item" id="chatsNav" type="button">
+    <span>💬</span>
+    <small>Chats</small>
+  </button>
+  <button class="nav-item" id="newChatNav" type="button">
+    <span>＋</span>
+    <small>New chat</small>
+  </button>
+  <button class="nav-item active" type="button">
+    <span>👤</span>
+    <small>Profile</small>
+  </button>
+</nav>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
+import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
+
+const firebaseConfig={
+  apiKey:"AIzaSyBzuctjdTAHT3kxdrIZz9aGe5mGLsiGwx4",
+  authDomain:"m3ss3nger-50a21.firebaseapp.com",
+  projectId:"m3ss3nger-50a21",
+  storageBucket:"m3ss3nger-50a21.firebasestorage.app",
+  messagingSenderId:"245814154474",
+  appId:"1:245814154474:web:4592f3a7e272154396f393"
+};
+
+const app=initializeApp(firebaseConfig);
+const auth=getAuth(app);
+const db=getFirestore(app);
+
+const nameEl=document.getElementById("profileName");
+const usernameEl=document.getElementById("profileUsername");
+const handleEl=document.getElementById("profileHandle");
+const avatarEl=document.getElementById("profileAvatar");
+
+onAuthStateChanged(auth,async user=>{
+  if(!user){
+    location.href="login.html";
+    return;
+  }
+
+  try{
+    const profile=await getDoc(doc(db,"users",user.uid));
+    const data=profile.exists()?profile.data():{};
+    const name=data.name || user.displayName || "User";
+    const username=data.username || "";
+
+    nameEl.textContent=name;
+    usernameEl.textContent=username ? "@"+username : "Profile";
+    handleEl.textContent=username ? "@"+username : "";
+    avatarEl.textContent=name.charAt(0).toUpperCase();
+  }catch(error){
+    console.error(error);
+    nameEl.textContent=user.displayName || "User";
+    usernameEl.textContent="Profile";
+  }
+});
+
+document.getElementById("backButton").addEventListener("click",()=>{
+  location.href="chat.html";
+});
+
+document.getElementById("chatsNav").addEventListener("click",()=>{
+  location.href="chat.html";
+});
+
+document.getElementById("newChatNav").addEventListener("click",()=>{
+  location.href="chat.html#new-chat";
+});
+
+document.getElementById("logoutButton").addEventListener("click",async()=>{
+  try{
+    await signOut(auth);
+    location.href="index.html";
+  }catch(error){
+    console.error(error);
+    alert("Could not log out. Please try again.");
+  }
+});
+</script>
+</body>
+</html>
