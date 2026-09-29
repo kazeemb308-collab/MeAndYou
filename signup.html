@@ -12,8 +12,10 @@
 <section class="auth-card">
 <div class="logo small">M</div>
 <h1>Create your account</h1>
-<p>Choose a username people can use to find you.</p>
+<p>Create your profile to start messaging.</p>
 <form id="authForm" novalidate>
+<label for="name">Name</label>
+<input id="name" name="name" type="text" autocomplete="name" placeholder="Your name" maxlength="50" required>
 <label for="username">Username</label>
 <input id="username" name="username" type="text" autocomplete="username" placeholder="@username" minlength="3" maxlength="20" required>
 <label for="email">Email</label>
