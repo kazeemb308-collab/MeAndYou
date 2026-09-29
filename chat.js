@@ -26,10 +26,16 @@ const conversationList=document.getElementById("conversationList");
 let currentUser=null;
 let presenceHeartbeat=null;
 
-async function startPresence(){
+let presenceConnectionUnsubscribe=null;
+
+function presenceRefFor(uid){
+  return rtdbRef(realtimeDb,"presence/"+uid);
+}
+
+async function setPresenceOnline(){
   if(!currentUser)return;
+  const presenceRef=presenceRefFor(currentUser.uid);
   try{
-    const presenceRef=rtdbRef(realtimeDb,"presence/"+currentUser.uid);
     await onDisconnect(presenceRef).set({
       online:false,
       lastSeen:rtdbServerTimestamp()
@@ -39,18 +45,40 @@ async function startPresence(){
       lastSeen:rtdbServerTimestamp()
     });
   }catch(error){
-    console.warn("Realtime presence failed:",error);
+    console.warn("Could not set online presence:",error);
   }
 }
 
-function stopPresence(){
+function setPresenceOffline(){
   if(!currentUser)return;
-  rtdbSet(rtdbRef(realtimeDb,"presence/"+currentUser.uid),{
+  rtdbSet(presenceRefFor(currentUser.uid),{
     online:false,
     lastSeen:rtdbServerTimestamp()
-  }).catch(()=>{});
+  }).catch(error=>console.warn("Could not set offline presence:",error));
 }
 
+function startPresence(){
+  if(!currentUser)return;
+  presenceConnectionUnsubscribe?.();
+  const connectedRef=rtdbRef(realtimeDb,".info/connected");
+  presenceConnectionUnsubscribe=onValue(connectedRef,snapshot=>{
+    if(snapshot.val()===true)setPresenceOnline();
+  });
+}
+
+function stopPresence(){
+  presenceConnectionUnsubscribe?.();
+  presenceConnectionUnsubscribe=null;
+  setPresenceOffline();
+}
+
+function handlePresenceVisibility(){
+  if(document.visibilityState==="visible"){
+    setPresenceOnline();
+  }else{
+    setPresenceOffline();
+  }
+}
 
 let unsubscribeSent=null;
 let unsubscribeReceived=null;
@@ -85,6 +113,7 @@ onAuthStateChanged(auth,async user=>{
 
   currentUser=user;
   startPresence();
+  document.addEventListener("visibilitychange",handlePresenceVisibility);
 
   try{
     const profile=await getDoc(doc(db,"users",user.uid));
@@ -413,6 +442,7 @@ document.getElementById("chatsNavButton")?.addEventListener("click",()=>{
 window.addEventListener("beforeunload",()=>{
   unsubscribeSent?.();
   unsubscribeReceived?.();
+  document.removeEventListener("visibilitychange",handlePresenceVisibility);
   stopPresence();
 });
 
