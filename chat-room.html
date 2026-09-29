@@ -9,7 +9,9 @@
 </head>
 <body class="room-page">
 <header class="room-header">
-  <button id="backButton" class="room-back" type="button" aria-label="Back">‹</button>
+  <button id="backButton" class="room-back" type="button" aria-label="Back">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+  </button>
   <div class="room-avatar" id="roomAvatar">?</div>
   <div class="room-person">
     <strong id="roomName">Loading…</strong>
@@ -25,9 +27,42 @@
   </div>
 </main>
 
+<div id="recordingBar" class="recording-bar" hidden>
+  <button id="cancelRecord" class="record-action danger" type="button" aria-label="Delete recording">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M9 7l1-2h4l1 2M6 7l1 14h10l1-14"/></svg>
+  </button>
+  <div class="recording-status">
+    <span class="record-dot"></span>
+    <strong id="recordingTime">0:00</strong>
+    <span id="recordingHint">Slide up to lock</span>
+  </div>
+  <button id="lockRecord" class="record-action" type="button" aria-label="Lock recording">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+  </button>
+</div>
+
+<div id="voicePreview" class="voice-preview" hidden>
+  <button id="discardVoice" class="preview-icon danger" type="button" aria-label="Delete voice note">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M9 7l1-2h4l1 2M6 7l1 14h10l1-14"/></svg>
+  </button>
+  <button id="playVoice" class="preview-play" type="button" aria-label="Play voice note">
+    <svg id="playVoiceIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7V5Z"/></svg>
+  </button>
+  <div class="preview-wave" id="previewWave"></div>
+  <span id="previewDuration">0:00</span>
+  <button id="sendVoice" class="preview-send" type="button" aria-label="Send voice note">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 4 16 8-16 8 3-8-3-8Z"/><path d="M7 12h13"/></svg>
+  </button>
+</div>
+
 <form id="messageForm" class="message-bar">
   <input id="messageInput" type="text" maxlength="2000" placeholder="Message" autocomplete="off">
-  <button id="sendButton" class="send-button" type="submit" aria-label="Send">➤</button>
+  <button id="voiceButton" class="voice-button" type="button" aria-label="Record voice note">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"/></svg>
+  </button>
+  <button id="sendButton" class="send-button" type="submit" aria-label="Send" hidden>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 4 16 8-16 8 3-8-3-8Z"/><path d="M7 12h13"/></svg>
+  </button>
 </form>
 
 <script src="navigation.js"></script>
