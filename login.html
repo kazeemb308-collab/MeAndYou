@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#075e54">
+  <title>Login — MeAndYou</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <main class="auth-page">
+    <section class="auth-card">
+      <div class="logo small">M</div>
+      <h1>Welcome back</h1>
+      <p>Log in to continue to MeAndYou.</p>
+
+      <form id="loginForm" novalidate>
+        <label for="email">Email</label>
+        <input id="email" type="email" autocomplete="email" placeholder="you@example.com" required>
+
+        <label for="password">Password</label>
+        <input id="password" type="password" autocomplete="current-password" placeholder="Your password" required>
+
+        <button class="primary" type="submit">Log in</button>
+      </form>
+
+      <button id="googleBtn" class="google" type="button">Continue with Google</button>
+      <p id="authMessage" class="message" role="status"></p>
+
+      <div class="switch-auth">Don't have an account? <a href="signup.html">Create one</a></div>
+    </section>
+  </main>
+  <script type="module" src="auth.js"></script>
+</body>
+</html>
