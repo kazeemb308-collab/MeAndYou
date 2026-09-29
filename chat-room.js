@@ -66,7 +66,7 @@ function listenForOtherPresence(){
  presenceUnsubscribe=onSnapshot(doc(db,"users",otherUid),snap=>{
   if(!snap.exists())return;
   const data=snap.data();
-  const isFresh=data.online===true&&data.lastSeen?.toDate&&Date.now()-data.lastSeen.toDate().getTime()<90000;
+  const isFresh=data.online===true&&(!data.lastSeen?.toDate||Date.now()-data.lastSeen.toDate().getTime()<90000);
   roomUsername.textContent=isFresh?"online":formatLastSeen(data.lastSeen);
  });
 }
