@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
-import { getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp, getDoc, doc } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp, getDoc, getDocs, updateDoc, writeBatch, doc } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
 const firebaseConfig={apiKey:"AIzaSyBzuctjdTAHT3kxdrIZz9aGe5mGLsiGwx4",authDomain:"m3ss3nger-50a21.firebaseapp.com",projectId:"m3ss3nger-50a21",storageBucket:"m3ss3nger-50a21.firebasestorage.app",messagingSenderId:"245814154474",appId:"1:245814154474:web:4592f3a7e272154396f393"};
 const app=initializeApp(firebaseConfig);
@@ -15,6 +15,26 @@ if(!otherUid){form.style.display="none";throw new Error("Missing recipient uid")
 let currentUser=null,unsubscribe=null,recorder=null,microphoneStream=null,recordedChunks=[],recordingStarted=0,recordingTimer=null,isLocked=false,audioBlob=null,audioUrl=null,audio=new Audio(),recordingMime="",recordingStarting=false,abortRecording=false,pointerHeld=false;
 const renderedMessages=new Map();
 const makeConversationId=(a,b)=>[a,b].sort().join("_");
+
+async function markMessagesRead(){
+ try{
+  if(!currentUser||!otherUid)return;
+  const snap=await getDocs(query(
+   collection(db,"messages"),
+   where("conversationId","==",makeConversationId(currentUser.uid,otherUid)),
+   where("receiverId","==",currentUser.uid),
+   where("senderId","==",otherUid)
+  ));
+  if(snap.empty)return;
+  const batch=writeBatch(db);
+  snap.docs.forEach(item=>{
+   if(item.data().readAt!==true)batch.update(item.ref,{readAt:true});
+  });
+  await batch.commit();
+ }catch(error){
+  console.error("Could not mark messages as read:",error);
+ }
+}
 
 async function sendPushNotification(messageId){
  try{
@@ -44,7 +64,8 @@ onAuthStateChanged(auth,async user=>{
  try{const profile=await getDoc(doc(db,"users",user.uid));if(!profile.exists()){location.href="login.html";return}listenForMessages()}catch(e){console.error(e);showMessageError()}
 });
 
-function listenForMessages(){
+async function listenForMessages(){
+ await markMessagesRead();
  const q=query(collection(db,"messages"),where("conversationId","==",makeConversationId(currentUser.uid,otherUid)));
  unsubscribe=onSnapshot(q,snapshot=>{
   if(snapshot.empty){emptyRoom.style.display="block";return}
@@ -121,7 +142,7 @@ form.addEventListener("submit",async e=>{
  if(!text||!currentUser)return;
  sendButton.disabled=true;
  try{
-  const messageRef=await addDoc(collection(db,"messages"),{conversationId:makeConversationId(currentUser.uid,otherUid),senderId:currentUser.uid,receiverId:otherUid,text,type:"text",createdAt:serverTimestamp()});
+  const messageRef=await addDoc(collection(db,"messages"),{conversationId:makeConversationId(currentUser.uid,otherUid),senderId:currentUser.uid,receiverId:otherUid,text,type:"text",readAt:false,createdAt:serverTimestamp()});
   await sendPushNotification(messageRef.id);
   input.value="";setComposer();input.focus()
  }catch(e){console.error(e);alert("Message could not be sent. Check your Firestore rules.")}
@@ -240,6 +261,7 @@ async function sendRecordedVoice(){
    senderId:currentUser.uid,
    receiverId:otherUid,
    type:"voice",
+   readAt:false,
    audioData,
    duration:Math.round((Date.now()-recordingStarted)/1000),
    createdAt:serverTimestamp()
