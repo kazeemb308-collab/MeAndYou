@@ -25,6 +25,24 @@ let searchTimer=null;
 let unsubscribeSent=null;
 let unsubscribeReceived=null;
 let messageMap=new Map();
+let notificationReady=false;
+const notifiedMessageIds=new Set();
+
+function notifyIncomingMessage(message){
+  if(!notificationReady||!("Notification" in window)||Notification.permission!=="granted")return;
+  if(message.senderId===currentUser.uid||notifiedMessageIds.has(message.id))return;
+  notifiedMessageIds.add(message.id);
+  const body=message.type==="voice"?"🎙️ New voice note":(message.text||"New message");
+  try{
+    new Notification("New message",{
+      body,
+      icon:"/favicon.png",
+      tag:"meandyou-"+message.id
+    });
+  }catch(error){
+    console.error("Notification error:",error);
+  }
+}
 
 onAuthStateChanged(auth,async user=>{
   if(!user){
@@ -48,6 +66,7 @@ onAuthStateChanged(auth,async user=>{
   }
 
   listenForConversations();
+  notificationReady=true;
 });
 
 function listenForConversations(){
@@ -63,6 +82,9 @@ function listenForConversations(){
 
   const handleSnapshot=snapshot=>{
     snapshot.docChanges().forEach(change=>{
+      if(change.type==="added" && !change.doc.metadata.hasPendingWrites){
+        notifyIncomingMessage({id:change.doc.id,...change.doc.data()});
+      }
       if(change.type==="removed"){
         messageMap.delete(change.doc.id);
       }else{
