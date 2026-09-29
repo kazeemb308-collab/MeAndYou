@@ -10,34 +10,22 @@ firebase.initializeApp({
   appId:"1:245814154474:web:4592f3a7e272154396f393"
 });
 
-const messaging=firebase.messaging();
+firebase.messaging();
 
-messaging.onBackgroundMessage(payload=>{
-  const data=payload.data||{};
-  const notification=payload.notification||{};
-  const title=data.title||notification.title||"MeAndYou";
-  const body=data.body||notification.body||"New message";
-  const url=data.url||"chat.html";
-  const messageId=data.messageId||"";
-
-  self.registration.showNotification(title,{
-    body,
-    icon:"/favicon.png",
-    badge:"/favicon.png",
-    tag:data.tag||"meandyou-message",
-    data:{url,messageId,senderId:data.senderId||"",receiverId:data.receiverId||""}
-  });
-});
+self.addEventListener("install",()=>self.skipWaiting());
+self.addEventListener("activate",event=>event.waitUntil(self.clients.claim()));
 
 self.addEventListener("notificationclick",event=>{
   event.notification.close();
-  const url=event.notification.data?.url||"/chat.html";
+  const data=event.notification.data||{};
+  const url=data.url||event.notification?.data?.FCM_MSG?.data?.url||"/chat.html";
   const targetUrl=new URL(url,self.location.origin).href;
+
   event.waitUntil(
     clients.matchAll({type:"window",includeUncontrolled:true}).then(clientList=>{
       for(const client of clientList){
         if("focus" in client){
-          client.navigate(targetUrl);
+          if("navigate" in client) client.navigate(targetUrl);
           return client.focus();
         }
       }
