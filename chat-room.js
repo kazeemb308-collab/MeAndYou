@@ -129,8 +129,9 @@ async function startRecording(){
   voicePreview.hidden=true;
   recordingHint.textContent="Slide up to lock";
   recorder.ondataavailable=e=>{if(e.data.size)recordedChunks.push(e.data)};
-  recorder.onstop=()=>{
+  recorder.onstop=async()=>{
    clearInterval(recordingTimer);
+   recorder=null;
    if(!recordedChunks.length){resetRecording();return}
    audioBlob=new Blob(recordedChunks,{type:recordingMime||"audio/webm"});
    audioUrl=URL.createObjectURL(audioBlob);
@@ -138,14 +139,20 @@ async function startRecording(){
    buildWave();
    recordingBar.hidden=true;
    voicePreview.hidden=false;
-   if(!isLocked) sendRecordedVoice()
+   if(!isLocked){
+    await sendRecordedVoice();
+   }
   };
   recorder.start(200);
   recordingTimer=setInterval(()=>recordingTime.textContent=formatTime((Date.now()-recordingStarted)/1000),250)
  }catch(e){console.error(e);alert("Microphone access was denied or unavailable.")}
 }
 
-function stopRecording(){if(recorder&&recorder.state!=="inactive")recorder.stop()}
+function stopRecording(){
+ if(!recorder||recorder.state==="inactive")return;
+ recorder.requestData?.();
+ recorder.stop();
+}
 
 function resetRecording(){
  if(recorder&&recorder.state!=="inactive")recorder.stop();
